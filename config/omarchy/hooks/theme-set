@@ -1,0 +1,75 @@
+#!/bin/bash
+
+# Sync stable waybar/border color files after omarchy-theme-set runs.
+# Aether calls `omarchy-theme-set aether` when applying a wallpaper,
+# which would overwrite our stable files with its extracted colors.
+# We skip the update for the aether theme so only real omarchy themes
+# change the waybar and border appearance.
+
+THEME_NAME="$1"
+OMARCHY_THEMES="$HOME/.local/share/omarchy/themes"
+USER_THEMES="$HOME/.config/omarchy/themes"
+
+# Skip if not a real omarchy theme (e.g. called by Aether)
+if [[ ! -d "$OMARCHY_THEMES/$THEME_NAME" && ! -d "$USER_THEMES/$THEME_NAME" ]]; then
+  exit 0
+fi
+
+cp ~/.config/omarchy/current/theme/waybar.css ~/.config/waybar/theme-colors.css
+cp ~/.config/omarchy/current/theme/hyprland.conf ~/.config/hypr/theme-border.conf
+
+# Strip sections from theme-border.conf that conflict with user config:
+#   - input {}   (user's input.conf handles this)
+#   - gestures{} (user's input.conf handles gestures)
+#   - layerrule  (syntax varies too much across Hyprland versions)
+# Also ensure $activeBorderColor is defined for looknfeel.conf.
+python3 << 'PYEOF'
+import re, os
+
+f = os.path.expanduser('~/.config/hypr/theme-border.conf')
+with open(f) as fp:
+    content = fp.read()
+
+def strip_block(text, name):
+    lines = text.split('\n')
+    out, depth, skip = [], 0, False
+    for line in lines:
+        s = line.strip()
+        if not skip:
+            if re.match(r'^' + name + r'\s*\{', s):
+                skip = True
+                depth = s.count('{') - s.count('}')
+            else:
+                out.append(line)
+        else:
+            depth += s.count('{') - s.count('}')
+            if depth <= 0:
+                skip = False
+    return '\n'.join(out)
+
+for block in ('input', 'gestures', 'layerrule'):
+    content = strip_block(content, block)
+
+# Also strip single-line layerrule directives (layerrule = rule, target)
+content = '\n'.join(l for l in content.split('\n')
+                    if not l.strip().startswith('layerrule'))
+
+# Ensure $activeBorderColor is defined (looknfeel.conf uses it)
+if '$activeBorderColor' not in content:
+    m = re.search(r'col\.active_border\s*=\s*([^#\n]+)', content)
+    val = m.group(1).strip() if m else 'rgba(ffffffaa)'
+    content = '$activeBorderColor = ' + val + '\n\n' + content
+
+# Ensure $inactiveBorderColor is defined (looknfeel.conf uses it)
+if '$inactiveBorderColor' not in content:
+    m = re.search(r'col\.inactive_border\s*=\s*([^#\n]+)', content)
+    val = m.group(1).strip() if m else 'rgba(595959aa)'
+    content = '$inactiveBorderColor = ' + val + '\n\n' + content
+
+with open(f, 'w') as fp:
+    fp.write(content)
+PYEOF
+
+pkill -SIGUSR2 waybar
+hyprctl reload
+
