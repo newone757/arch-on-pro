@@ -1,6 +1,6 @@
-# arch-on-air
+# arch-on-pro
 
-Arch Linux dotfiles for MacBook Air M1, running [armarchy](https://github.com/jondkinney/armarchy) (Hyprland + Wayland).
+Arch Linux dotfiles for MacBook Pro (Apple Silicon), running [Omarchy](https://omarchy.org/) (Hyprland + Wayland).
 
 Starting from scratch? See [docs/armarchy-m1-install-guide.md](docs/armarchy-m1-install-guide.md) for getting Arch onto Apple Silicon in the first place.
 
@@ -15,11 +15,11 @@ config/
 │   ├── bindings.conf       # App launchers, window management, custom keybinds
 │   ├── input.conf          # Trackpad settings and 3/4-finger gestures
 │   ├── looknfeel.conf      # Gaps, borders, animations, scrolling layout config
-│   ├── monitors.conf       # Display scale and VRR
+│   ├── monitors.conf       # Display scale (2x) and VRR — tuned for 16" retina
 │   └── scripts/            # Gesture scripts for scrolling layout navigation
 ├── omarchy/
 │   ├── hooks/theme-set     # Syncs theme files and reloads Hyprland after theme change
-│   └── branding/about.txt  # Custom AIR ASCII logo for fastfetch
+│   └── branding/about.txt  # Custom ASCII logo for fastfetch
 ├── fastfetch/
 │   └── config.jsonc        # System info layout with hardware/software/uptime sections
 └── waybar/                 # Status bar layout and styles
@@ -30,7 +30,9 @@ docs/
 
 ---
 
-## What's changed from armarchy defaults
+## What's changed from Omarchy defaults
+
+**Display scaling** — `monitors.conf` uses 2x scaling (`monitor=,preferred,auto,2`) with `GDK_SCALE=2` for the 16" retina display. Integer 2x gives sharper rendering than fractional scaling.
 
 **Hyprland 0.55.x fixes** — the default `looknfeel.conf` references two options removed in newer Hyprland (`col.border_locked_* = -1` and `dwindle { pseudotile }`). The default is replaced here with a user-owned version that drops both.
 
@@ -47,8 +49,8 @@ docs/
 ## Applying these configs
 
 ```bash
-git clone https://github.com/newone757/arch-on-air.git
-cd arch-on-air
+git clone https://github.com/newone757/arch-on-pro.git
+cd arch-on-pro
 ```
 
 Symlink or copy what you need into `~/.config/`. The scripts need to be executable:
@@ -60,10 +62,14 @@ chmod +x config/omarchy/hooks/theme-set
 
 ---
 
-## Hinterlands theme
-
-Modified Hinterlands (reworked borders and shadows for clearer window focus) is in a separate repo:
+## Custom themes
 
 ```bash
 omarchy-theme-install https://github.com/newone757/armarchy-hinterlands-theme
+omarchy-theme-install https://github.com/newone757/dew-point-theme
+omarchy-theme-install https://github.com/newone757/toxic-city-theme
+omarchy-theme-install https://github.com/newone757/break-through-theme
+omarchy-theme-install https://github.com/newone757/dead-eye-theme
+omarchy-theme-install https://github.com/newone757/sullen-fog-theme
+omarchy-theme-install https://github.com/newone757/frozen-bliss-theme
 ```
