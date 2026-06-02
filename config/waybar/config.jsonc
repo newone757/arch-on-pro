@@ -7,7 +7,6 @@
   "modules-left": ["custom/omarchy", "hyprland/workspaces"],
   "modules-center": [],
   "modules-right": [
-    "clock",
     "custom/voxtype",
     "custom/update",
     "custom/screenrecording-indicator",
@@ -18,7 +17,8 @@
     "network",
     "pulseaudio",
     "cpu",
-    "battery"
+    "battery",
+    "clock"
   ],
   "hyprland/workspaces": {
     "on-click": "activate",
