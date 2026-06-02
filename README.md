@@ -46,6 +46,8 @@ docs/
 
 **Function row fix** — by default on this hardware the function row acts as F1-F12, requiring `fn` for media/brightness/volume keys. `etc/modprobe.d/hid_apple.conf` sets `fnmode=1` to flip this. Copy it to `/etc/modprobe.d/` and apply live with `echo 1 | sudo tee /sys/module/hid_apple/parameters/fnmode`.
 
+**Notch support** — enables the full panel height including the notch area. Add `appledrm.show_notch=1` to `GRUB_CMDLINE_LINUX_DEFAULT` in `/etc/default/grub`, then run `sudo grub-mkconfig -o /boot/grub/grub.cfg` and reboot. The waybar height is set to 33px to align with the notch on the 16" display at 2x scaling.
+
 ---
 
 ## Applying these configs

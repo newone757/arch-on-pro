@@ -19,6 +19,10 @@
   margin-right: 8px;
 }
 
+#clock {
+  margin-right: 16px;
+}
+
 #workspaces button {
   all: initial;
   padding: 0 6px;
