@@ -1,7 +1,7 @@
 @import "theme-colors.css";
 
 * {
-  background-color: @background;
+  background-color: transparent;
   color: @foreground;
 
   border: none;
@@ -11,12 +11,22 @@
   font-size: 12px;
 }
 
+window#waybar {
+  background-color: transparent;
+}
+
 .modules-left {
-  margin-left: 8px;
+  background-color: @background;
+  border-radius: 12px;
+  margin: 4px 0 0 14px;
+  padding: 0 10px 0 4px;
 }
 
 .modules-right {
-  margin-right: 8px;
+  background-color: @background;
+  border-radius: 12px;
+  margin: 4px 14px 0 0;
+  padding: 0 4px 0 10px;
 }
 
 #clock {
