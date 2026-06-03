@@ -58,6 +58,14 @@ docs/
 
 **Hide macOS partitions from Nautilus** — `etc/udev/rules.d/99-hide-macos-partitions.rules` hides the APFS partitions (macOS system, data, recovery, and update volumes) from the Nautilus sidebar. Copy it to `/etc/udev/rules.d/` and apply with `sudo udevadm control --reload-rules && sudo udevadm trigger`. To unhide them, delete the file and reload: `sudo rm /etc/udev/rules.d/99-hide-macos-partitions.rules && sudo udevadm control --reload-rules && sudo udevadm trigger`.
 
+**Super+Shift+S screenshot** — adds a Windows 11-style screenshot shortcut. Smart mode: click a window to capture it, or drag to select a region. Opens in Satty for annotation and copies to clipboard.
+
+**Waybar pill margins** — side margins reduced from 14px to 6px (matching the 4px top gap) so the pills sit closer to the display's curved corners. Window `gaps_out` set to 6px to align window edges with the pill edges.
+
+**Battery tooltip** — hovering the battery icon shows estimated time remaining (or time to full when charging), draw in watts, and capacity percentage.
+
+**Fastfetch branding** — `branding/about.txt` uses the built-in Arch Linux ASCII logo (two-tone red/blue) with block-style "ARM" text beneath it, replacing the default Omarchy logo.
+
 ---
 
 ## Applying these configs
