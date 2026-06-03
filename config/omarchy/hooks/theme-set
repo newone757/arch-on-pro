@@ -73,3 +73,10 @@ PYEOF
 pkill -SIGUSR2 waybar
 hyprctl reload
 
+# Recolor folder icons to match theme accent color
+ICONS_COLOR_FILE="$HOME/.config/omarchy/current/theme/icons.color"
+if [[ -f "$ICONS_COLOR_FILE" ]]; then
+    omarchy-icons-apply-color "$(<$ICONS_COLOR_FILE)"
+fi
+
+
