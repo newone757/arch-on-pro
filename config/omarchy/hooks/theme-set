@@ -73,11 +73,17 @@ PYEOF
 pkill -SIGUSR2 waybar
 hyprctl reload
 
-# Recolor folder icons — use icons.color if defined, otherwise derive from theme accent
+# Recolor folder icons:
+#   - icons.color present → use it explicitly with OmarchyIcons
+#   - icons.theme points to a specific non-OmarchyIcons theme → respect it, skip
+#   - no icons.theme or already OmarchyIcons → auto-derive from theme accent
 ICONS_COLOR_FILE="$HOME/.config/omarchy/current/theme/icons.color"
+ICONS_THEME_FILE="$HOME/.config/omarchy/current/theme/icons.theme"
+ICONS_THEME_VAL="$([[ -f $ICONS_THEME_FILE ]] && cat $ICONS_THEME_FILE || echo '')"
+
 if [[ -f "$ICONS_COLOR_FILE" ]]; then
     omarchy-icons-apply-color "$(<$ICONS_COLOR_FILE)"
-else
+elif [[ -z "$ICONS_THEME_VAL" || "$ICONS_THEME_VAL" == "OmarchyIcons" ]]; then
     python3 << 'PYEOF'
 import re, subprocess, os
 
@@ -109,6 +115,7 @@ try:
 except Exception:
     pass
 PYEOF
+# else: theme has its own icons.theme (e.g. Yaru-purple) — respect it, do nothing
 fi
 
 
