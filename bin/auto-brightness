@@ -2,8 +2,8 @@
 """
 auto-brightness — Ambient Light Sensor auto-brightness for Asahi Linux / Hyprland
 
-Reads lux from IIO sysfs and controls brightness via brightnessctl.
-Smoothly ramps brightness and respects manual slider changes.
+Reads lux from IIO sysfs and controls display + keyboard brightness via brightnessctl.
+Eased ramping respects manual slider changes on the display; keyboard always auto.
 """
 
 import glob
@@ -25,18 +25,18 @@ def notify(summary, body="", urgency="low", timeout=2500):
         pass
 
 # ---------------------------------------------------------------------------
-# Tuning
+# Tuning — display
 # ---------------------------------------------------------------------------
 
-POLL_INTERVAL  = 0.25   # seconds between sensor reads
-SMOOTH_STEP    = 3       # raw brightnessctl units per cycle (out of 500)
+POLL_INTERVAL      = 0.1    # seconds between sensor reads
+SMOOTH_STEP_MAX    = 6      # max display units per cycle (eased, out of 500)
 
-LUX_CHANGE_PCT = 75      # % lux change to resume after manual override
-LUX_CHANGE_MIN = 5       # absolute lux floor for low-light override detection
+LUX_CHANGE_PCT     = 75     # % lux change to resume after manual override
+LUX_CHANGE_MIN     = 5      # absolute lux floor for low-light override detection
 
-MIN_BRIGHTNESS = 10      # floor (raw units)
+MIN_BRIGHTNESS     = 10     # display floor (raw units)
 
-# Lux → brightness % curve (linearly interpolated)
+# Lux → display brightness % curve (linearly interpolated)
 LUX_CURVE = [
     (0,     2),
     (1,     3),
@@ -48,6 +48,25 @@ LUX_CURVE = [
     (400,  80),
     (700,  92),
     (1000, 100),
+]
+
+# ---------------------------------------------------------------------------
+# Tuning — keyboard backlight
+# ---------------------------------------------------------------------------
+
+KB_SMOOTH_STEP_MAX = 3      # max kbd units per cycle (out of 255)
+KB_MIN_BRIGHTNESS  = 0      # kbd floor (can go dark)
+
+# Lux → keyboard brightness % curve
+# Stays dim in normal/indoor light, ramps up only in very bright environments
+# so keys remain visible when ambient light washes them out.
+KB_CURVE = [
+    (0,    3),
+    (100,  3),
+    (300,  5),
+    (500,  12),
+    (700,  22),
+    (1000, 35),
 ]
 
 # ---------------------------------------------------------------------------
@@ -75,55 +94,90 @@ def read_lux(sensor_file):
         return None
 
 # ---------------------------------------------------------------------------
-# Brightness control via brightnessctl
+# Display brightness (brightnessctl, device auto-selected)
 # ---------------------------------------------------------------------------
 
 def brightness_max():
     try:
-        out = subprocess.check_output(["brightnessctl", "max"], text=True).strip()
-        return int(out)
+        return int(subprocess.check_output(["brightnessctl", "max"], text=True).strip())
     except Exception:
         return 500
 
 def brightness_get():
     try:
-        out = subprocess.check_output(["brightnessctl", "get"], text=True).strip()
-        return int(out)
+        return int(subprocess.check_output(["brightnessctl", "get"], text=True).strip())
     except Exception:
         return None
 
 def brightness_set(val, max_val):
     val = max(MIN_BRIGHTNESS, min(int(val), max_val))
     try:
+        subprocess.run(["brightnessctl", "set", str(val)], capture_output=True)
+    except Exception:
+        pass
+
+# ---------------------------------------------------------------------------
+# Keyboard backlight (brightnessctl -d kbd_backlight)
+# ---------------------------------------------------------------------------
+
+def kb_max():
+    try:
+        return int(subprocess.check_output(
+            ["brightnessctl", "-d", "kbd_backlight", "max"], text=True).strip())
+    except Exception:
+        return 255
+
+def kb_get():
+    try:
+        return int(subprocess.check_output(
+            ["brightnessctl", "-d", "kbd_backlight", "get"], text=True).strip())
+    except Exception:
+        return None
+
+def kb_set(val, max_val):
+    val = max(KB_MIN_BRIGHTNESS, min(int(val), max_val))
+    try:
         subprocess.run(
-            ["brightnessctl", "set", str(val)],
+            ["brightnessctl", "-d", "kbd_backlight", "set", str(val)],
             capture_output=True
         )
     except Exception:
         pass
 
 # ---------------------------------------------------------------------------
-# Lux → brightness mapping
+# Lux → brightness mapping (shared for display and keyboard)
 # ---------------------------------------------------------------------------
 
-def lux_to_brightness(lux, max_val):
-    if lux <= LUX_CURVE[0][0]:
-        pct = LUX_CURVE[0][1]
-    elif lux >= LUX_CURVE[-1][0]:
-        pct = LUX_CURVE[-1][1]
+def lux_to_target(lux, curve, max_val, floor):
+    if lux <= curve[0][0]:
+        pct = curve[0][1]
+    elif lux >= curve[-1][0]:
+        pct = curve[-1][1]
     else:
-        pct = 50
-        for i in range(len(LUX_CURVE) - 1):
-            l0, b0 = LUX_CURVE[i]
-            l1, b1 = LUX_CURVE[i + 1]
+        pct = curve[0][1]
+        for i in range(len(curve) - 1):
+            l0, b0 = curve[i]
+            l1, b1 = curve[i + 1]
             if l0 <= lux <= l1:
                 t = (lux - l0) / (l1 - l0)
                 pct = b0 + t * (b1 - b0)
                 break
-    return max(MIN_BRIGHTNESS, min(max_val, int(round(pct / 100.0 * max_val))))
+    return max(floor, min(max_val, int(round(pct / 100.0 * max_val))))
 
 # ---------------------------------------------------------------------------
-# Manual override detection
+# Eased step — fast when far, smooth near target
+# ---------------------------------------------------------------------------
+
+def eased_step(current, target, step_max):
+    distance = abs(target - current)
+    step = max(1, min(step_max, distance // 6))
+    if current < target:
+        return min(current + step, target)
+    else:
+        return max(current - step, target)
+
+# ---------------------------------------------------------------------------
+# Manual override detection (display only)
 # ---------------------------------------------------------------------------
 
 def lux_changed_enough(current_lux, override_lux):
@@ -145,24 +199,27 @@ def main():
         sys.exit(1)
     print(f"auto-brightness: sensor '{sensor_name}' at {sensor_file}", flush=True)
 
-    max_val = brightness_max()
-    current = brightness_get()
-    if current is None:
+    disp_max = brightness_max()
+    disp_cur = brightness_get()
+    if disp_cur is None:
         print("auto-brightness: cannot read brightness, exiting", flush=True)
         sys.exit(1)
 
-    print(f"auto-brightness: brightnessctl max={max_val}, "
-          f"step={SMOOTH_STEP}, poll={POLL_INTERVAL}s, "
-          f"initial={current}/{max_val}", flush=True)
+    kb_max_val = kb_max()
+    kb_cur     = kb_get() or 0
+    kb_avail   = kb_get() is not None
+
+    print(f"auto-brightness: display max={disp_max}, kb max={kb_max_val}, "
+          f"poll={POLL_INTERVAL}s", flush=True)
     notify("Auto-brightness active")
 
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     signal.signal(signal.SIGINT,  lambda *_: sys.exit(0))
 
-    last_set       = current
+    last_set        = disp_cur
     manual_override = False
-    override_lux   = 0
-    idle_cycles    = 0
+    override_lux    = 0
+    idle_cycles     = 0
 
     while True:
         time.sleep(POLL_INTERVAL)
@@ -171,49 +228,55 @@ def main():
         if lux is None:
             continue
 
-        target = lux_to_brightness(lux, max_val)
+        disp_target = lux_to_target(lux, LUX_CURVE, disp_max, MIN_BRIGHTNESS)
 
-        # Check for manual override only when idle (stable at target)
-        if idle_cycles >= 4:
+        # Manual override detection (display only) — check when stable at target
+        if idle_cycles >= 8:
             actual = brightness_get()
-            if actual is not None and abs(actual - last_set) > SMOOTH_STEP * 3:
+            if actual is not None and abs(actual - last_set) > SMOOTH_STEP_MAX * 3:
                 if not manual_override:
                     print(f"auto-brightness: manual override "
                           f"(ours={last_set}, actual={actual})", flush=True)
                     notify("Brightness: manual", "Auto-brightness paused")
                 manual_override = True
                 override_lux    = lux
-                current         = actual
+                disp_cur        = actual
                 last_set        = actual
                 idle_cycles     = 0
-                continue
 
         if manual_override:
             if lux_changed_enough(lux, override_lux):
                 actual = brightness_get()
                 if actual is not None:
-                    current  = actual
+                    disp_cur = actual
                     last_set = actual
                 manual_override = False
-                print(f"auto-brightness: resuming at {current}/{max_val} "
-                      f"(lux {override_lux}->{lux})", flush=True)
+                print(f"auto-brightness: resuming (lux {override_lux}->{lux})", flush=True)
                 notify("Brightness: auto")
             else:
+                # Still step keyboard even during display override
+                if kb_avail:
+                    kb_target = lux_to_target(lux, KB_CURVE, kb_max_val, KB_MIN_BRIGHTNESS)
+                    if kb_cur != kb_target:
+                        kb_cur = eased_step(kb_cur, kb_target, KB_SMOOTH_STEP_MAX)
+                        kb_set(kb_cur, kb_max_val)
                 continue
 
-        if current == target:
-            idle_cycles = min(idle_cycles + 1, 100)
-            continue
-
-        idle_cycles = 0
-
-        if current < target:
-            current = min(current + SMOOTH_STEP, target)
+        # Step display
+        if disp_cur != disp_target:
+            idle_cycles = 0
+            disp_cur    = eased_step(disp_cur, disp_target, SMOOTH_STEP_MAX)
+            brightness_set(disp_cur, disp_max)
+            last_set = disp_cur
         else:
-            current = max(current - SMOOTH_STEP, target)
+            idle_cycles = min(idle_cycles + 1, 100)
 
-        brightness_set(current, max_val)
-        last_set = current
+        # Step keyboard
+        if kb_avail:
+            kb_target = lux_to_target(lux, KB_CURVE, kb_max_val, KB_MIN_BRIGHTNESS)
+            if kb_cur != kb_target:
+                kb_cur = eased_step(kb_cur, kb_target, KB_SMOOTH_STEP_MAX)
+                kb_set(kb_cur, kb_max_val)
 
 
 if __name__ == "__main__":
