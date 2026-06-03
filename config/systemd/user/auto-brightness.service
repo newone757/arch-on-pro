@@ -1,0 +1,11 @@
+[Unit]
+Description=Ambient light sensor auto-brightness
+After=graphical-session.target
+
+[Service]
+ExecStart=%h/.local/bin/auto-brightness
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target
