@@ -74,48 +74,51 @@ def build_css(c):
   --decorative-subdued:            {hl}   !important;
 }}
 
-/* ── Layout: all surfaces use the theme background ───────────── */
-[data-testid="left-sidebar"],
-[data-testid="left-sidebar"] > *,
-[data-testid="topbar"],
-header[aria-label],
-[data-testid="main-view-container"],
-.main-view-container__scroll-node-child-spacer {{
+/* ── Root background — Spotify sets this directly on html ─────── */
+html {{
   background-color: {bg} !important;
 }}
 
-/* Now-playing bar: same bg, subtle top border */
-[data-testid="now-playing-bar"],
-footer[aria-label],
-.Root__now-playing-bar {{
+/* ── Nav bar (actual testid) ─────────────────────────────────── */
+[data-testid="global-nav-bar"] {{
+  background-color: {bg} !important;
+}}
+
+/* ── Now-playing bar ─────────────────────────────────────────── */
+[data-testid="now-playing-bar"] {{
   background-color: {bg} !important;
   border-top: 1px solid {hl} !important;
 }}
 
-/* Kill Spotify's dynamic header gradient */
+/* ── Kill Spotify's dynamic album-art header gradient ────────── */
 [data-testid="background-color"],
 .x-categoryCard-CardBackground {{
   background-color: {bg} !important;
   background-image: none !important;
 }}
 
-/* ── Cards: blend with background, lift on hover ─────────────── */
+/* ── Cards: transparent so bg shows through, lift on hover ───── */
 [data-testid$="-card"],
 .main-card-card {{
   background-color: transparent !important;
 }}
 [data-testid$="-card"]:hover,
-.main-card-card:hover {{
-  background-color: {hl} !important;
-}}
+.main-card-card:hover,
 [data-testid="tracklist-row"]:hover {{
   background-color: {hl} !important;
 }}
 
-/* ── Progress bar fill ───────────────────────────────────────── */
-[data-testid="playback-progressbar"] [style*="width"],
-[data-testid="playback-progressbar"] [style*="transform"] {{
+/* ── Progress bar ────────────────────────────────────────────── */
+/* Fill — already getting our accent via CSS var, but pin it explicitly */
+[data-testid="progress-bar"],
+[data-testid="volume-bar"] [style*="transform"],
+[data-testid="volume-bar"] [style*="width"] {{
   background-color: {acc} !important;
+}}
+/* Track — replace white overlay with subtle theme colour */
+[data-testid="progress-bar-background"] {{
+  background-color: {hl} !important;
+  opacity: 1 !important;
 }}
 """
 
