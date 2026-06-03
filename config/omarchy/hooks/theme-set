@@ -145,17 +145,39 @@ def mix(c1, c2, t):
     return hex_(r1*t+r2*(1-t), g1*t+g2*(1-t), b1*t+b2*(1-t))
 
 try:
-    with open(colors_file) as f:
-        content = f.read()
+    # Support both colors.toml (user themes) and alacritty.toml (built-in themes)
+    alacritty_file = os.path.join(os.path.dirname(colors_file), 'alacritty.toml')
 
-    bg     = get(content, 'background', '#121212')
-    fg     = get(content, 'foreground', '#ffffff')
-    accent = get(content, 'accent',     '#1db954')
-    neg    = get(content, 'color1',     '#e22134')
-    pos    = get(content, 'color2',     '#1db954')
+    if os.path.exists(colors_file):
+        with open(colors_file) as f:
+            content = f.read()
+        bg     = get(content, 'background', '#121212')
+        fg     = get(content, 'foreground', '#ffffff')
+        accent = get(content, 'accent',     '#1db954')
+        palette = {f'color{i}': get(content, f'color{i}', bg if i == 0 else fg) for i in range(16)}
+    elif os.path.exists(alacritty_file):
+        with open(alacritty_file) as f:
+            content = f.read()
+        def alac(section, key, fallback):
+            import re
+            m = re.search(rf'\[colors\.{section}\].*?{key}\s*=\s*"(#[0-9a-fA-F]{{6}})"', content, re.DOTALL)
+            return m.group(1) if m else fallback
+        bg   = alac('primary', 'background', '#121212')
+        fg   = alac('primary', 'foreground', '#ffffff')
+        norm = ['black','red','green','yellow','blue','magenta','cyan','white']
+        brt  = ['black','red','green','yellow','blue','magenta','cyan','white']
+        palette = {}
+        for i, n in enumerate(norm):
+            palette[f'color{i}']    = alac('normal', n, bg if i == 0 else fg)
+        for i, n in enumerate(brt):
+            palette[f'color{i+8}']  = alac('bright', n, fg)
+        accent = palette.get('color4', '#1db954')
+    else:
+        raise FileNotFoundError('no colors.toml or alacritty.toml found')
 
-    # Extract full ANSI palette for semantic Spicetify-style mapping
-    colors = {f'color{i}': get(content, f'color{i}', bg if i == 0 else fg) for i in range(16)}
+    neg = palette.get('color1', '#e22134')
+    pos = palette.get('color10', palette.get('color2', '#1db954'))
+    colors = palette
 
     out = {
         **colors,

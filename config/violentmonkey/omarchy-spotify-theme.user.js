@@ -6,10 +6,16 @@
 // @run-at       document-start
 // ==/UserScript==
 
-const CSS_URL  = 'http://localhost:7842/spotify.css';
+const SERVER   = 'http://localhost:7842';
 const STYLE_ID = 'omarchy-spotify-theme';
 
-function inject(css) {
+// Tags whose inline background we should never touch
+const SKIP_TAGS = new Set(['IMG', 'VIDEO', 'CANVAS', 'SVG', 'INPUT', 'TEXTAREA', 'BUTTON']);
+
+let _bgColor = null; // hex string e.g. "#0b0d15"
+
+// ── CSS injection ──────────────────────────────────────────────
+function injectCSS(css) {
   let el = document.getElementById(STYLE_ID);
   if (!el) {
     el = document.createElement('style');
@@ -19,26 +25,112 @@ function inject(css) {
   el.textContent = css;
 }
 
-function load() {
-  GM_xmlhttpRequest({
-    method: 'GET',
-    url: CSS_URL,
-    onload(res) {
-      inject(res.responseText);
-      setTimeout(() => inject(res.responseText), 800);
-      setTimeout(() => inject(res.responseText), 2500);
-    },
-    onerror() {
-      console.warn('[omarchy-spotify] theme server not reachable — is omarchy-theme-server running?');
-    }
+// ── Inline-style background override ──────────────────────────
+// Spotify sets album-art-extracted colours as inline background-color/
+// background-image on dynamically generated obfuscated div classes.
+// CSS can't target these reliably; override them via JS instead.
+function fixEl(el) {
+  if (!_bgColor || SKIP_TAGS.has(el.tagName)) return;
+  const style = el.getAttribute('style') || '';
+  if (/background(-color|-image|:)/i.test(style)) {
+    el.style.setProperty('background-color', _bgColor, 'important');
+    el.style.setProperty('background-image', 'none', 'important');
+  }
+}
+
+function fixTree(root) {
+  if (!_bgColor || !root) return;
+  // Include root itself + all div/span descendants.
+  // Checks computed styles to catch CSS-class-based backgrounds.
+  const els = root.querySelectorAll
+    ? [root, ...root.querySelectorAll('div, span')]
+    : [root];
+  els.forEach(el => {
+    if (SKIP_TAGS.has(el.tagName)) return;
+    try {
+      const cs = getComputedStyle(el);
+      const bgc = cs.backgroundColor;
+      const bgi = cs.backgroundImage;
+      const hasProblematicBg =
+        bgc === 'rgb(0, 0, 0)' ||                    // pure black gaps
+        (bgi !== 'none' && bgi.includes('gradient')); // gradient headers
+      const hasInlineBg = /background(-color|-image|:)/i.test(el.getAttribute('style') || '');
+      if (hasProblematicBg || hasInlineBg) {
+        el.style.setProperty('background-color', _bgColor, 'important');
+        el.style.setProperty('background-image', 'none', 'important');
+      }
+    } catch (_) {}
   });
 }
 
-if (document.head || document.body) {
+let _bgObserver = null;
+function startObserver() {
+  if (_bgObserver) return;
+  _bgObserver = new MutationObserver(mutations => {
+    for (const m of mutations) {
+      if (m.type === 'childList') m.addedNodes.forEach(n => n.nodeType === 1 && fixTree(n));
+      if (m.type === 'attributes') fixEl(m.target);
+    }
+  });
+  _bgObserver.observe(document.documentElement, {
+    childList: true, subtree: true,
+    attributes: true, attributeFilter: ['style']
+  });
+}
+
+// ── Load from server ───────────────────────────────────────────
+function load() {
+  // Fetch CSS
+  GM_xmlhttpRequest({
+    method: 'GET', url: SERVER + '/spotify.css',
+    onload(res) {
+      injectCSS(res.responseText);
+      setTimeout(() => injectCSS(res.responseText), 800);
+    },
+    onerror() { console.warn('[omarchy-spotify] CSS: server not reachable'); }
+  });
+
+  // Fetch JSON for background colour (used by JS inline-style override)
+  GM_xmlhttpRequest({
+    method: 'GET', url: SERVER + '/',
+    onload(res) {
+      try {
+        const c = JSON.parse(res.responseText);
+        _bgColor = c.color0 || c.background || '#121212';
+        fixTree(document.body);
+        startObserver();
+      } catch(e) {}
+    },
+    onerror() { console.warn('[omarchy-spotify] JSON: server not reachable'); }
+  });
+}
+
+// ── Scroll handler ─────────────────────────────────────────────
+// Spotify applies page-color backgrounds to sticky headers on scroll.
+// Rescan header areas once per animation frame when scrolling.
+let _scrollRaf;
+document.addEventListener('scroll', () => {
+  if (!_bgColor || _scrollRaf) return;
+  _scrollRaf = requestAnimationFrame(() => {
+    _scrollRaf = null;
+    [
+      '[data-testid="global-nav-bar"]',
+      '[data-testid="now-playing-bar"]',
+    ].forEach(sel => {
+      const el = document.querySelector(sel);
+      if (el) fixTree(el);
+    });
+    // Rescan any sticky/pinned containers that appeared
+    document.querySelectorAll('[style*="background"]').forEach(fixEl);
+  });
+}, { passive: true, capture: true });
+
+// ── Boot ───────────────────────────────────────────────────────
+if (document.body) {
   load();
 } else {
   new MutationObserver((_, obs) => {
-    if (document.head || document.body) { obs.disconnect(); load(); }
+    if (document.body) { obs.disconnect(); load(); }
   }).observe(document.documentElement, { childList: true });
 }
 
