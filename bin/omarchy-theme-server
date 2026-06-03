@@ -32,40 +32,102 @@ def hue_of(hex_color):
 
 
 def build_css(c):
-    # Hue-rotate to shift Spotify's hardcoded green (#1ed760, hue ~141°)
-    # to our accent color.
-    hue_rotate = hue_of(c['accent']) - 141
+    bg    = c['background_base']
+    bgh   = c['background_highlight']
+    bge   = c['background_elevated_base']
+    bgeh  = c['background_elevated_highlight']
+    fg    = c['text_base']
+    fgs   = c['text_subdued']
+    acc   = c['accent']
+    pos   = c['positive']
+    neg   = c['negative']
 
     return f"""\
 /* Omarchy Spotify Theme — auto-generated, do not edit */
 
+/* ── Design tokens ──────────────────────────────────────────── */
 .encore-dark-theme,
 .encore-dark-theme .encore-base-set,
 :root {{
-  --background-base:               {c['background_base']}              !important;
-  --background-highlight:          {c['background_highlight']}         !important;
-  --background-press:              {c['background_press']}             !important;
-  --background-elevated-base:      {c['background_elevated_base']}     !important;
-  --background-elevated-highlight: {c['background_elevated_highlight']} !important;
-  --background-tinted-base:        {c['background_tinted_base']}       !important;
-  --background-tinted-highlight:   {c['background_tinted_highlight']}  !important;
-  --text-base:                     {c['text_base']}                    !important;
-  --text-subdued:                  {c['text_subdued']}                 !important;
-  --text-bright-accent:            {c['accent']}                       !important;
-  --essential-bright-accent:       {c['accent']}                       !important;
-  --essential-positive:            {c['positive']}                     !important;
-  --essential-negative:            {c['negative']}                     !important;
-  --decorative-base:               {c['decorative_base']}              !important;
-  --decorative-subdued:            {c['decorative_subdued']}           !important;
+  --background-base:               {bg}   !important;
+  --background-highlight:          {bgh}  !important;
+  --background-press:              {c['background_press']} !important;
+  --background-elevated-base:      {bge}  !important;
+  --background-elevated-highlight: {bgeh} !important;
+  --background-tinted-base:        {c['background_tinted_base']} !important;
+  --background-tinted-highlight:   {c['background_tinted_highlight']} !important;
+  --text-base:                     {fg}   !important;
+  --text-subdued:                  {fgs}  !important;
+  --text-bright-accent:            {acc}  !important;
+  --essential-base:                {fg}   !important;
+  --essential-subdued:             {fgs}  !important;
+  --essential-bright-accent:       {acc}  !important;
+  --essential-positive:            {pos}  !important;
+  --essential-negative:            {neg}  !important;
+  --decorative-base:               {c['decorative_base']} !important;
+  --decorative-subdued:            {c['decorative_subdued']} !important;
 }}
 
-/* Shift hardcoded Spotify green to our accent hue */
-[data-testid="playback-progressbar"] [class],
-[data-testid="now-playing-widget"] [class]:not([data-testid]),
-[aria-checked="true"] svg,
-[class*="activeindicator" i],
-[class*="NowPlaying" i] [class] {{
-  filter: hue-rotate({hue_rotate}deg) !important;
+/* ── Layout areas ────────────────────────────────────────────── */
+/* Sidebar */
+[data-testid="left-sidebar"],
+[data-testid="left-sidebar"] > * {{
+  background-color: {bg} !important;
+}}
+
+/* Top navigation bar */
+[data-testid="topbar"],
+header[aria-label] {{
+  background-color: {bg} !important;
+}}
+
+/* Now-playing bar */
+[data-testid="now-playing-bar"],
+footer[aria-label],
+.Root__now-playing-bar {{
+  background-color: {bge} !important;
+  border-top: 1px solid {bgh} !important;
+}}
+
+/* Main scrollable view */
+[data-testid="main-view-container"],
+.main-view-container,
+.main-view-container__scroll-node-child-spacer {{
+  background-color: {bg} !important;
+}}
+
+/* Page header gradient — replace Spotify's dynamic colour with ours */
+[data-testid="background-color"],
+.x-categoryCard-CardBackground,
+.contentSpacing {{
+  background-color: {bg} !important;
+}}
+
+/* ── Cards & rows ────────────────────────────────────────────── */
+[data-testid$="-card"],
+.main-card-card {{
+  background-color: {bge} !important;
+}}
+[data-testid$="-card"]:hover,
+.main-card-card:hover {{
+  background-color: {bgeh} !important;
+}}
+[data-testid="tracklist-row"]:hover {{
+  background-color: {bgh} !important;
+}}
+
+/* ── Progress bar fill ───────────────────────────────────────── */
+/* Directly colour the filled portion regardless of which variable it reads */
+[data-testid="playback-progressbar"] [style*="width"],
+[data-testid="playback-progressbar"] [style*="transform"] {{
+  background-color: {acc} !important;
+}}
+
+/* ── Active / selected accents ───────────────────────────────── */
+[data-testid="now-playing-widget"] [aria-label] span,
+[class*="activeindicator" i] {{
+  color: {acc} !important;
+  fill: {acc} !important;
 }}
 """
 
