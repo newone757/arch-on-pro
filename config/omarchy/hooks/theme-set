@@ -73,10 +73,42 @@ PYEOF
 pkill -SIGUSR2 waybar
 hyprctl reload
 
-# Recolor folder icons to match theme accent color
+# Recolor folder icons — use icons.color if defined, otherwise derive from theme accent
 ICONS_COLOR_FILE="$HOME/.config/omarchy/current/theme/icons.color"
 if [[ -f "$ICONS_COLOR_FILE" ]]; then
     omarchy-icons-apply-color "$(<$ICONS_COLOR_FILE)"
+else
+    python3 << 'PYEOF'
+import re, subprocess, os
+
+colors_file = os.path.expanduser('~/.config/omarchy/current/theme/colors.toml')
+try:
+    with open(colors_file) as f:
+        content = f.read()
+
+    color_hex = None
+    for key in ['accent', 'color5', 'color4', 'foreground']:
+        m = re.search(rf'^{key}\s*=\s*"#([0-9a-fA-F]{{6}})"', content, re.MULTILINE)
+        if m:
+            color_hex = m.group(1)
+            break
+
+    if color_hex:
+        r, g, b = int(color_hex[0:2], 16), int(color_hex[2:4], 16), int(color_hex[4:6], 16)
+        luminance = (r*299 + g*587 + b*114) // 1000
+
+        # Clamp luminance to visible folder range (80-170), preserving hue
+        if luminance < 80 and luminance > 0:
+            factor = 110 / luminance
+            r, g, b = min(255, int(r*factor)), min(255, int(g*factor)), min(255, int(b*factor))
+        elif luminance > 170:
+            factor = 140 / luminance
+            r, g, b = int(r*factor), int(g*factor), int(b*factor)
+
+        subprocess.run(['omarchy-icons-apply-color', f'#{r:02x}{g:02x}{b:02x}'])
+except Exception:
+    pass
+PYEOF
 fi
 
 
