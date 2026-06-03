@@ -118,4 +118,65 @@ PYEOF
 # else: theme has its own icons.theme (e.g. Yaru-purple) — respect it, do nothing
 fi
 
+# Generate Spotify theme colors for the Violentmonkey userscript
+python3 << 'PYEOF'
+import re, os, json
+
+colors_file = os.path.expanduser('~/.config/omarchy/current/theme/colors.toml')
+output_file = os.path.expanduser('~/.config/omarchy/current/spotify-theme.json')
+
+def get(content, key, fallback):
+    m = re.search(rf'^{key}\s*=\s*"(#[0-9a-fA-F]{{6}})"', content, re.MULTILINE)
+    return m.group(1) if m else fallback
+
+def rgb(h):
+    h = h.lstrip('#')
+    return int(h[:2],16), int(h[2:4],16), int(h[4:],16)
+
+def hex_(r, g, b):
+    return f'#{int(r):02x}{int(g):02x}{int(b):02x}'
+
+def lighten(c, t):
+    r,g,b = rgb(c)
+    return hex_(r+(255-r)*t, g+(255-g)*t, b+(255-b)*t)
+
+def mix(c1, c2, t):
+    r1,g1,b1 = rgb(c1); r2,g2,b2 = rgb(c2)
+    return hex_(r1*t+r2*(1-t), g1*t+g2*(1-t), b1*t+b2*(1-t))
+
+try:
+    with open(colors_file) as f:
+        content = f.read()
+
+    bg     = get(content, 'background', '#121212')
+    fg     = get(content, 'foreground', '#ffffff')
+    accent = get(content, 'accent',     '#1db954')
+    neg    = get(content, 'color1',     '#e22134')
+    pos    = get(content, 'color2',     '#1db954')
+
+    out = {
+        'background_base':             bg,
+        'background_highlight':        lighten(bg, 0.12),
+        'background_press':            lighten(bg, 0.18),
+        'background_elevated_base':    lighten(bg, 0.22),
+        'background_elevated_highlight': lighten(bg, 0.30),
+        'background_tinted_base':      mix(accent, bg, 0.15),
+        'background_tinted_highlight': mix(accent, bg, 0.22),
+        'text_base':                   fg,
+        'text_subdued':                mix(fg, bg, 0.55),
+        'accent':                      accent,
+        'positive':                    pos,
+        'negative':                    neg,
+        'decorative_base':             mix(fg, bg, 0.35),
+        'decorative_subdued':          mix(fg, bg, 0.15),
+    }
+
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    with open(output_file, 'w') as f:
+        json.dump(out, f, indent=2)
+except Exception as e:
+    import sys
+    print(f'spotify-theme: {e}', file=sys.stderr)
+PYEOF
+
 
