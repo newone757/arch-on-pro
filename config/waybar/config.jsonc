@@ -17,6 +17,7 @@
     "network",
     "pulseaudio",
     "cpu",
+    "custom/brightness",
     "battery",
     "clock"
   ],
@@ -84,6 +85,12 @@
     "interval": 3,
     "spacing": 1,
     "on-click": "omarchy-launch-wifi"
+  },
+  "custom/brightness": {
+    "exec": "waybar-brightness",
+    "return-type": "json",
+    "interval": 2,
+    "tooltip": true
   },
   "battery": {
     "format": "{capacity}% {icon}",

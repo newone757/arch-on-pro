@@ -2,7 +2,8 @@
 """
 auto-brightness — Ambient Light Sensor auto-brightness for Asahi Linux / Hyprland
 
-Reads lux from IIO sysfs and controls display + keyboard brightness via brightnessctl.
+Reads lux from IIO sysfs and controls display + keyboard brightness.
+Sysfs used for all reads (no subprocess); brightnessctl used for writes only.
 Eased ramping respects manual slider changes on the display; keyboard always auto.
 """
 
@@ -55,18 +56,15 @@ LUX_CURVE = [
 # ---------------------------------------------------------------------------
 
 KB_SMOOTH_STEP_MAX = 3      # max kbd units per cycle (out of 255)
-KB_MIN_BRIGHTNESS  = 0      # kbd floor (can go dark)
+KB_MIN_BRIGHTNESS  = 0      # kbd floor (curve handles minimum)
 
 # Lux → keyboard brightness % curve
-# Stays dim in normal/indoor light, ramps up only in very bright environments
-# so keys remain visible when ambient light washes them out.
+# 10% floor in darkness, reaches 100% at normal indoor light (~200 lux).
 KB_CURVE = [
-    (0,    3),
-    (100,  3),
-    (300,  5),
-    (500,  12),
-    (700,  22),
-    (1000, 35),
+    (0,    10),
+    (20,   10),
+    (100,  55),
+    (200, 100),
 ]
 
 # ---------------------------------------------------------------------------
@@ -86,28 +84,25 @@ def find_sensor():
             return lux_file, name
     return None, None
 
-def read_lux(sensor_file):
+def read_sysfs_int(path):
     try:
-        with open(sensor_file) as f:
+        with open(path) as f:
             return int(f.read().strip())
     except Exception:
         return None
 
 # ---------------------------------------------------------------------------
-# Display brightness (brightnessctl, device auto-selected)
+# Display brightness — sysfs reads, brightnessctl writes
 # ---------------------------------------------------------------------------
 
+DISP_BRIGHTNESS_PATH = "/sys/class/backlight/apple-panel-bl/brightness"
+DISP_MAX_PATH        = "/sys/class/backlight/apple-panel-bl/max_brightness"
+
 def brightness_max():
-    try:
-        return int(subprocess.check_output(["brightnessctl", "max"], text=True).strip())
-    except Exception:
-        return 500
+    return read_sysfs_int(DISP_MAX_PATH) or 500
 
 def brightness_get():
-    try:
-        return int(subprocess.check_output(["brightnessctl", "get"], text=True).strip())
-    except Exception:
-        return None
+    return read_sysfs_int(DISP_BRIGHTNESS_PATH)
 
 def brightness_set(val, max_val):
     val = max(MIN_BRIGHTNESS, min(int(val), max_val))
@@ -117,22 +112,17 @@ def brightness_set(val, max_val):
         pass
 
 # ---------------------------------------------------------------------------
-# Keyboard backlight (brightnessctl -d kbd_backlight)
+# Keyboard backlight — sysfs reads, brightnessctl writes
 # ---------------------------------------------------------------------------
 
+KB_BRIGHTNESS_PATH = "/sys/class/leds/kbd_backlight/brightness"
+KB_MAX_PATH        = "/sys/class/leds/kbd_backlight/max_brightness"
+
 def kb_max():
-    try:
-        return int(subprocess.check_output(
-            ["brightnessctl", "-d", "kbd_backlight", "max"], text=True).strip())
-    except Exception:
-        return 255
+    return read_sysfs_int(KB_MAX_PATH) or 255
 
 def kb_get():
-    try:
-        return int(subprocess.check_output(
-            ["brightnessctl", "-d", "kbd_backlight", "get"], text=True).strip())
-    except Exception:
-        return None
+    return read_sysfs_int(KB_BRIGHTNESS_PATH)
 
 def kb_set(val, max_val):
     val = max(KB_MIN_BRIGHTNESS, min(int(val), max_val))
@@ -202,7 +192,7 @@ def main():
     disp_max = brightness_max()
     disp_cur = brightness_get()
     if disp_cur is None:
-        print("auto-brightness: cannot read brightness, exiting", flush=True)
+        print("auto-brightness: cannot read display brightness, exiting", flush=True)
         sys.exit(1)
 
     kb_max_val = kb_max()
@@ -224,13 +214,13 @@ def main():
     while True:
         time.sleep(POLL_INTERVAL)
 
-        lux = read_lux(sensor_file)
+        lux = read_sysfs_int(sensor_file)
         if lux is None:
             continue
 
         disp_target = lux_to_target(lux, LUX_CURVE, disp_max, MIN_BRIGHTNESS)
 
-        # Manual override detection (display only) — check when stable at target
+        # Manual override detection — check when stable at target
         if idle_cycles >= 8:
             actual = brightness_get()
             if actual is not None and abs(actual - last_set) > SMOOTH_STEP_MAX * 3:
@@ -254,7 +244,6 @@ def main():
                 print(f"auto-brightness: resuming (lux {override_lux}->{lux})", flush=True)
                 notify("Brightness: auto")
             else:
-                # Still step keyboard even during display override
                 if kb_avail:
                     kb_target = lux_to_target(lux, KB_CURVE, kb_max_val, KB_MIN_BRIGHTNESS)
                     if kb_cur != kb_target:

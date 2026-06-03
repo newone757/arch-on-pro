@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+disp=$(cat /sys/class/backlight/apple-panel-bl/brightness)
+disp_max=$(cat /sys/class/backlight/apple-panel-bl/max_brightness)
+disp_pct=$(( disp * 100 / disp_max ))
+
+kbd=$(cat /sys/class/leds/kbd_backlight/brightness)
+kbd_max=$(cat /sys/class/leds/kbd_backlight/max_brightness)
+kbd_pct=$(( kbd * 100 / kbd_max ))
+
+printf '{"text":"󰃟","tooltip":"󰍹  Display: %d%%\\n󰌌  Keyboard: %d%%"}\n' "$disp_pct" "$kbd_pct"
