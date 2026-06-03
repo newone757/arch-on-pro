@@ -70,7 +70,11 @@ window#waybar {
 }
 
 tooltip {
-  padding: 2px;
+  background-color: @background;
+  color: @foreground;
+  border: none;
+  border-radius: 6px;
+  padding: 6px;
 }
 
 #custom-update {
