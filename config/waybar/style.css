@@ -18,14 +18,14 @@ window#waybar {
 .modules-left {
   background-color: @background;
   border-radius: 12px;
-  margin: 4px 0 0 14px;
+  margin: 4px 0 0 6px;
   padding: 0 10px 0 4px;
 }
 
 .modules-right {
   background-color: @background;
   border-radius: 12px;
-  margin: 4px 14px 0 0;
+  margin: 4px 6px 0 0;
   padding: 0 4px 0 10px;
 }
 
