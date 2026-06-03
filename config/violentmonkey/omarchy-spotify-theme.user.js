@@ -9,39 +9,55 @@
 // Theme JSON served by omarchy-theme-server (systemd user service on port 7842).
 const THEME_FILE = 'http://localhost:7842/';
 
-const STYLE_ID = 'omarchy-spotify-theme';
+const VARS = {
+  '--background-base':               'background_base',
+  '--background-highlight':          'background_highlight',
+  '--background-press':              'background_press',
+  '--background-elevated-base':      'background_elevated_base',
+  '--background-elevated-highlight': 'background_elevated_highlight',
+  '--background-tinted-base':        'background_tinted_base',
+  '--background-tinted-highlight':   'background_tinted_highlight',
+  '--text-base':                     'text_base',
+  '--text-subdued':                  'text_subdued',
+  '--text-bright-accent':            'accent',
+  '--essential-base':                'text_base',
+  '--essential-subdued':             'text_subdued',
+  '--essential-bright-accent':       'accent',
+  '--essential-positive':            'positive',
+  '--essential-negative':            'negative',
+  '--decorative-base':               'decorative_base',
+  '--decorative-subdued':            'decorative_subdued',
+};
 
-function buildCSS(c) {
-  return `
-    :root {
-      --background-base:               ${c.background_base}              !important;
-      --background-highlight:          ${c.background_highlight}         !important;
-      --background-press:              ${c.background_press}             !important;
-      --background-elevated-base:      ${c.background_elevated_base}     !important;
-      --background-elevated-highlight: ${c.background_elevated_highlight}!important;
-      --background-tinted-base:        ${c.background_tinted_base}       !important;
-      --background-tinted-highlight:   ${c.background_tinted_highlight}  !important;
-      --text-base:                     ${c.text_base}                    !important;
-      --text-subdued:                  ${c.text_subdued}                 !important;
-      --text-bright-accent:            ${c.accent}                       !important;
-      --essential-base:                ${c.text_base}                    !important;
-      --essential-subdued:             ${c.text_subdued}                 !important;
-      --essential-bright-accent:       ${c.accent}                       !important;
-      --essential-positive:            ${c.positive}                     !important;
-      --essential-negative:            ${c.negative}                     !important;
-      --decorative-base:               ${c.decorative_base}              !important;
-      --decorative-subdued:            ${c.decorative_subdued}           !important;
+let _colors = null;
+let _observer = null;
+
+function apply(colors) {
+  // Set inline styles with !important on html and body —
+  // this beats Spotify's own JS-injected inline style tokens.
+  for (const el of [document.documentElement, document.body]) {
+    if (!el) continue;
+    for (const [cssVar, key] of Object.entries(VARS)) {
+      el.style.setProperty(cssVar, colors[key], 'important');
     }
-  `;
+  }
 }
 
-function inject(colors) {
-  const existing = document.getElementById(STYLE_ID);
-  if (existing) existing.remove();
-  const style = document.createElement('style');
-  style.id = STYLE_ID;
-  style.textContent = buildCSS(colors);
-  (document.head || document.documentElement).appendChild(style);
+function watch(colors) {
+  if (_observer) _observer.disconnect();
+  _observer = new MutationObserver(() => {
+    // Reapply if Spotify resets our inline styles
+    _observer.disconnect();
+    apply(colors);
+    _observer.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] });
+    if (document.body) {
+      _observer.observe(document.body, { attributes: true, attributeFilter: ['style'] });
+    }
+  });
+  _observer.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] });
+  if (document.body) {
+    _observer.observe(document.body, { attributes: true, attributeFilter: ['style'] });
+  }
 }
 
 function load() {
@@ -50,27 +66,36 @@ function load() {
     url: THEME_FILE,
     onload(res) {
       try {
-        const colors = JSON.parse(res.responseText);
-        inject(colors);
-        // Re-inject after Spotify's own styles have loaded
-        setTimeout(() => inject(colors), 800);
+        _colors = JSON.parse(res.responseText);
+        apply(_colors);
+        watch(_colors);
+        // Re-apply after Spotify's own init runs
+        setTimeout(() => apply(_colors), 500);
+        setTimeout(() => apply(_colors), 1500);
       } catch (e) {
         console.warn('[omarchy-spotify] failed to parse theme JSON:', e);
       }
     },
     onerror() {
-      console.warn('[omarchy-spotify] could not read theme file:', THEME_FILE);
+      console.warn('[omarchy-spotify] theme server not reachable — is omarchy-theme-server running?');
     }
   });
 }
 
-load();
+// Wait for body to exist before first apply
+if (document.body) {
+  load();
+} else {
+  new MutationObserver((_, obs) => {
+    if (document.body) { obs.disconnect(); load(); }
+  }).observe(document.documentElement, { childList: true });
+}
 
-// Re-apply on SPA navigation (Spotify changes the URL without a full page reload)
-let lastUrl = location.href;
+// Re-apply on SPA navigation
+let _lastUrl = location.href;
 new MutationObserver(() => {
-  if (location.href !== lastUrl) {
-    lastUrl = location.href;
-    setTimeout(load, 300);
+  if (location.href !== _lastUrl) {
+    _lastUrl = location.href;
+    setTimeout(() => { if (_colors) apply(_colors); }, 400);
   }
 }).observe(document.documentElement, { subtree: true, childList: true });
