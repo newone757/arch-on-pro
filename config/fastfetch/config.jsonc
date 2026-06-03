@@ -3,11 +3,14 @@
   "logo": {
     "type": "file",
     "source": "~/.config/omarchy/branding/about.txt",
-    "color": { "1": "green", "2": "cyan", "3": "blue", "4": "white" },
+    "color": {
+      "1": "red",
+      "2": "blue"
+    },
     "padding": {
-      "top": 2,
-      "right": 6,
-      "left": 2
+      "top": 1,
+      "left": 3,
+      "right": 4
     }
   },
   "modules": [
@@ -18,18 +21,18 @@
     },
     {
       "type": "host",
-      "key": " PC",
+      "key": " PC",
       "keyColor": "green"
     },
     {
       "type": "cpu",
-      "key": "│ ├",
+      "key": "│ ├",
       "showPeCoreCount": true,
       "keyColor": "green"
     },
     {
       "type": "gpu",
-      "key": "│ ├",
+      "key": "│ ├",
       "detectionMethod": "pci",
       "keyColor": "green"
     },
@@ -45,7 +48,7 @@
     },
     {
       "type": "memory",
-      "key": "│ ├",
+      "key": "│ ├",
       "keyColor": "green"
     },
     {
@@ -64,7 +67,7 @@
     },
     {
       "type": "os",
-      "key": "\ue900 OS",
+      "key": " OS",
       "keyColor": "blue"
     },
     {
@@ -79,22 +82,22 @@
     },
     {
       "type": "kernel",
-      "key": "│ ├",
+      "key": "│ ├",
       "keyColor": "blue"
     },
     {
       "type": "wm",
-      "key": "│ ├",
+      "key": "│ ├",
       "keyColor": "blue"
     },
     {
       "type": "de",
-      "key": " DE",
+      "key": " DE",
       "keyColor": "blue"
     },
     {
       "type": "terminal",
-      "key": "│ ├",
+      "key": "│ ├",
       "keyColor": "blue"
     },
     {
@@ -115,7 +118,7 @@
     },
     {
       "type": "terminalfont",
-      "key": "└ └",
+      "key": "└ └",
       "keyColor": "blue"
     },
     {
@@ -140,7 +143,7 @@
     },
     {
       "type": "command",
-      "key": " Update",
+      "key": " Update",
       "keyColor": "magenta",
       "text": "updated=$(omarchy-version-pkgs); echo \"$updated\""
     },
