@@ -50,9 +50,11 @@ def strip_block(text, name):
 for block in ('input', 'gestures', 'layerrule'):
     content = strip_block(content, block)
 
-# Also strip single-line layerrule directives (layerrule = rule, target)
+# Also strip single-line directives that don't belong in user config
+# or use deprecated syntax (windowrulev2 is deprecated in current Hyprland)
 content = '\n'.join(l for l in content.split('\n')
-                    if not l.strip().startswith('layerrule'))
+                    if not l.strip().startswith('layerrule')
+                    and not l.strip().startswith('windowrulev2'))
 
 # Ensure $activeBorderColor is defined (looknfeel.conf uses it)
 if '$activeBorderColor' not in content:
