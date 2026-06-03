@@ -83,7 +83,7 @@ ICONS_THEME_VAL="$([[ -f $ICONS_THEME_FILE ]] && cat $ICONS_THEME_FILE || echo '
 
 if [[ -f "$ICONS_COLOR_FILE" ]]; then
     omarchy-icons-apply-color "$(<$ICONS_COLOR_FILE)"
-elif [[ -z "$ICONS_THEME_VAL" || "$ICONS_THEME_VAL" == "OmarchyIcons" ]]; then
+elif [[ -z "$ICONS_THEME_VAL" || "$ICONS_THEME_VAL" == "OmarchyIcons" || "$THEME_NAME" == "aether" ]]; then
     python3 << 'PYEOF'
 import re, subprocess, os
 

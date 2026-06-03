@@ -1,0 +1,57 @@
+#!/bin/bash
+# Sets up Brave as the default browser with Widevine DRM enabled.
+# Safe to run on a fresh install or re-run to repair.
+
+set -e
+
+echo "Setting up Brave..."
+
+# Install if missing
+if ! command -v brave &>/dev/null; then
+    echo "Installing brave-bin..."
+    omarchy-pkg-aur-add brave-bin
+fi
+
+# Set as default browser
+xdg-settings set default-web-browser brave-browser.desktop
+echo "Set as default browser."
+
+# Copy ARM64 Widevine CDM into Brave's profile directory
+BRAVE_CDM="$HOME/.config/BraveSoftware/Brave-Browser/WidevineCdm"
+if [[ -f /opt/WidevineCdm/chromium/manifest.json ]]; then
+    mkdir -p "$BRAVE_CDM/_platform_specific/linux_arm64"
+    cp /opt/WidevineCdm/chromium/manifest.json "$BRAVE_CDM/"
+    cp /opt/WidevineCdm/chromium/_platform_specific/linux_arm64/libwidevinecdm.so \
+       "$BRAVE_CDM/_platform_specific/linux_arm64/"
+    echo "Widevine CDM copied to Brave profile."
+else
+    echo "Warning: system Widevine not found at /opt/WidevineCdm — install the widevine AUR package first."
+fi
+
+# Symlink Widevine into Brave's app directory (same as system Chromium does)
+if [[ ! -L /opt/brave-bin/WidevineCdm ]]; then
+    sudo ln -sf /opt/WidevineCdm/chromium /opt/brave-bin/WidevineCdm
+    echo "Widevine symlinked into /opt/brave-bin/."
+fi
+
+# Enable Widevine opt-in in Brave preferences (if profile exists)
+BRAVE_PREFS="$HOME/.config/BraveSoftware/Brave-Browser/Default/Preferences"
+if [[ -f "$BRAVE_PREFS" ]]; then
+    python3 -c "
+import json
+with open('$BRAVE_PREFS') as f: p = json.load(f)
+p.setdefault('brave', {})['widevine_opted_in'] = True
+with open('$BRAVE_PREFS', 'w') as f: json.dump(p, f, separators=(',', ':'))
+print('Widevine opted-in in preferences.')
+"
+fi
+
+# Fix Brave policy directory permissions for theme integration
+sudo mkdir -p /etc/brave/policies/managed
+sudo chmod a+rwx /etc/brave/policies/managed
+[[ -f /etc/brave/policies/managed/color.json ]] && sudo chown "$USER" /etc/brave/policies/managed/color.json
+
+echo ""
+echo "Done. One manual step required:"
+echo "  Open Brave → brave://extensions → enable 'Widevine Content Decryption Module'"
+echo "  (Required for DRM content like Spotify — can't be automated)"
