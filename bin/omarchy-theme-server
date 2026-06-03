@@ -108,18 +108,21 @@ html {{
   background-color: {hl} !important;
 }}
 
-/* ── Progress bar ────────────────────────────────────────────── */
-/* Fill — already getting our accent via CSS var, but pin it explicitly */
+/* ── Progress / Volume sliders ───────────────────────────────── */
+/* Containers must stay transparent — painting them gives a bounding box */
 [data-testid="progress-bar"],
-[data-testid="volume-bar"] [style*="transform"],
-[data-testid="volume-bar"] [style*="width"] {{
-  background-color: {acc} !important;
+[data-testid="volume-bar"] {{
+  background-color: transparent !important;
 }}
-/* Track — replace white overlay with subtle theme colour */
+/* Track (unfilled rail) */
 [data-testid="progress-bar-background"] {{
   background-color: {hl} !important;
   opacity: 1 !important;
 }}
+/* Hover fill/thumb color is handled in JS (fixSliderHover) because
+   Spotify's hover state uses hardcoded #1db954 via obfuscated class
+   selectors — CSS alone can't target just the fill without painting
+   wrapper divs and creating bounding boxes. */
 """
 
 
