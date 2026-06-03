@@ -1,0 +1,10 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = asahi-audio
+
+[Action]
+Description = Reapplying custom asahi-audio speaker tuning...
+When = PostTransaction
+Exec = /bin/cp /etc/asahi-audio/j316/graph.json /usr/share/asahi-audio/j316/graph.json

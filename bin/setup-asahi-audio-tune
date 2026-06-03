@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Applies custom asahi-audio speaker tuning (reduced Bankstown bass amt: 1.8 → 1.0)
+# and installs a pacman hook to re-apply after asahi-audio upgrades.
+set -e
+
+DOTFILES="$(cd "$(dirname "$0")/.." && pwd)"
+
+echo "Installing tuned graph.json to /etc/asahi-audio/j316/..."
+sudo mkdir -p /etc/asahi-audio/j316
+sudo cp "$DOTFILES/usr/share/asahi-audio/j316/graph.json" /etc/asahi-audio/j316/graph.json
+
+echo "Applying to /usr/share/asahi-audio/j316/..."
+sudo cp /etc/asahi-audio/j316/graph.json /usr/share/asahi-audio/j316/graph.json
+
+echo "Installing pacman hook..."
+sudo mkdir -p /etc/pacman.d/hooks
+sudo cp "$DOTFILES/etc/pacman.d/hooks/asahi-audio-tune.hook" /etc/pacman.d/hooks/
+
+echo "Restarting WirePlumber..."
+systemctl --user restart wireplumber
+
+echo "Done."

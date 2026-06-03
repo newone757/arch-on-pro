@@ -12,8 +12,15 @@ Starting from scratch? See [docs/armarchy-m1-install-guide.md](docs/armarchy-m1-
 bin/
 ├── auto-brightness         # ALS auto-brightness daemon (see setup-auto-brightness)
 ├── setup-auto-brightness   # Installs auto-brightness + systemd service
+├── setup-asahi-audio-tune  # Applies custom speaker tuning + pacman hook
 ├── setup-brave             # Automates fresh Brave install setup
 └── omarchy-icons-apply-color  # Recolors OmarchyIcons folder SVGs
+
+usr/share/asahi-audio/j316/
+└── graph.json              # Tuned speaker DSP (Bankstown bass amt reduced)
+
+etc/pacman.d/hooks/
+└── asahi-audio-tune.hook   # Re-applies tuning after asahi-audio upgrades
 
 config/
 ├── hypr/
@@ -64,6 +71,8 @@ docs/
 
 **Battery tooltip** — hovering the battery icon shows estimated time remaining (or time to full when charging), draw in watts, and capacity percentage.
 
+**Speaker tuning** — `asahi-audio` is installed and provides the j316 DSP pipeline, but the default Bankstown bass enhancement (`amt: 1.8`) is too aggressive on this hardware. `usr/share/asahi-audio/j316/graph.json` reduces it to `1.0` for tighter, less muddy low end. A pacman hook keeps the tuning in place after `asahi-audio` upgrades.
+
 **Fastfetch branding** — `branding/about.txt` uses the built-in Arch Linux ASCII logo (two-tone red/blue) with block-style "ARM" text beneath it, replacing the default Omarchy logo.
 
 ---
@@ -81,6 +90,14 @@ Symlink or copy what you need into `~/.config/`. The scripts need to be executab
 chmod +x config/hypr/scripts/*
 chmod +x config/omarchy/hooks/theme-set
 ```
+
+**Speaker tuning** (reduced bass enhancement for less muddy sound):
+
+```bash
+./bin/setup-asahi-audio-tune
+```
+
+Copies the tuned DSP config to `/etc/asahi-audio/j316/` and `/usr/share/asahi-audio/j316/`, installs a pacman hook to re-apply after `asahi-audio` upgrades, and restarts WirePlumber.
 
 **Auto-brightness** (ambient light sensor → display brightness):
 
