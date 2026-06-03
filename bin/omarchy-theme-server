@@ -32,102 +32,90 @@ def hue_of(hex_color):
 
 
 def build_css(c):
-    bg    = c['background_base']
-    bgh   = c['background_highlight']
-    bge   = c['background_elevated_base']
-    bgeh  = c['background_elevated_highlight']
-    fg    = c['text_base']
-    fgs   = c['text_subdued']
-    acc   = c['accent']
-    pos   = c['positive']
-    neg   = c['negative']
+    # Semantic mapping mirrors the omarchy-theme-hook Spicetify color.ini approach:
+    #   color0  = all background surfaces (main/sidebar/cards/player — flat, cohesive)
+    #   color8  = hover/highlight (bright black = subtle lift)
+    #   color2  = accent / button-active
+    #   color15 = primary text (bright white = foreground)
+    #   color7  = subdued text (normal white)
+    #   color1  = negative / error
+    #   color10 = positive (bright green equivalent)
+    bg   = c.get('color0',  c.get('background',  '#121212'))
+    hl   = c.get('color8',  '#333333')
+    acc  = c.get('color2',  c.get('accent',       '#1db954'))
+    text = c.get('color15', c.get('foreground',   '#ffffff'))
+    tsub = c.get('color7',  '#aaaaaa')
+    neg  = c.get('color1',  '#e22134')
+    pos  = c.get('color10', c.get('color2', acc))
 
     return f"""\
 /* Omarchy Spotify Theme — auto-generated, do not edit */
 
-/* ── Design tokens ──────────────────────────────────────────── */
+/* ── Design tokens (Spicetify-style flat mapping) ───────────── */
 .encore-dark-theme,
 .encore-dark-theme .encore-base-set,
 :root {{
   --background-base:               {bg}   !important;
-  --background-highlight:          {bgh}  !important;
-  --background-press:              {c['background_press']} !important;
-  --background-elevated-base:      {bge}  !important;
-  --background-elevated-highlight: {bgeh} !important;
-  --background-tinted-base:        {c['background_tinted_base']} !important;
-  --background-tinted-highlight:   {c['background_tinted_highlight']} !important;
-  --text-base:                     {fg}   !important;
-  --text-subdued:                  {fgs}  !important;
+  --background-highlight:          {hl}   !important;
+  --background-press:              {hl}   !important;
+  --background-elevated-base:      {bg}   !important;
+  --background-elevated-highlight: {hl}   !important;
+  --background-tinted-base:        {bg}   !important;
+  --background-tinted-highlight:   {hl}   !important;
+  --text-base:                     {text} !important;
+  --text-subdued:                  {tsub} !important;
   --text-bright-accent:            {acc}  !important;
-  --essential-base:                {fg}   !important;
-  --essential-subdued:             {fgs}  !important;
+  --essential-base:                {text} !important;
+  --essential-subdued:             {tsub} !important;
   --essential-bright-accent:       {acc}  !important;
   --essential-positive:            {pos}  !important;
   --essential-negative:            {neg}  !important;
-  --decorative-base:               {c['decorative_base']} !important;
-  --decorative-subdued:            {c['decorative_subdued']} !important;
+  --decorative-base:               {tsub} !important;
+  --decorative-subdued:            {hl}   !important;
 }}
 
-/* ── Layout areas ────────────────────────────────────────────── */
-/* Sidebar */
+/* ── Layout: all surfaces use the theme background ───────────── */
 [data-testid="left-sidebar"],
-[data-testid="left-sidebar"] > * {{
-  background-color: {bg} !important;
-}}
-
-/* Top navigation bar */
+[data-testid="left-sidebar"] > *,
 [data-testid="topbar"],
-header[aria-label] {{
-  background-color: {bg} !important;
-}}
-
-/* Now-playing bar */
-[data-testid="now-playing-bar"],
-footer[aria-label],
-.Root__now-playing-bar {{
-  background-color: {bge} !important;
-  border-top: 1px solid {bgh} !important;
-}}
-
-/* Main scrollable view */
+header[aria-label],
 [data-testid="main-view-container"],
-.main-view-container,
 .main-view-container__scroll-node-child-spacer {{
   background-color: {bg} !important;
 }}
 
-/* Page header gradient — replace Spotify's dynamic colour with ours */
-[data-testid="background-color"],
-.x-categoryCard-CardBackground,
-.contentSpacing {{
+/* Now-playing bar: same bg, subtle top border */
+[data-testid="now-playing-bar"],
+footer[aria-label],
+.Root__now-playing-bar {{
   background-color: {bg} !important;
+  border-top: 1px solid {hl} !important;
 }}
 
-/* ── Cards & rows ────────────────────────────────────────────── */
+/* Kill Spotify's dynamic header gradient */
+[data-testid="background-color"],
+.x-categoryCard-CardBackground {{
+  background-color: {bg} !important;
+  background-image: none !important;
+}}
+
+/* ── Cards: blend with background, lift on hover ─────────────── */
 [data-testid$="-card"],
 .main-card-card {{
-  background-color: {bge} !important;
+  background-color: transparent !important;
 }}
 [data-testid$="-card"]:hover,
 .main-card-card:hover {{
-  background-color: {bgeh} !important;
+  background-color: {hl} !important;
 }}
 [data-testid="tracklist-row"]:hover {{
-  background-color: {bgh} !important;
+  background-color: {hl} !important;
 }}
 
 /* ── Progress bar fill ───────────────────────────────────────── */
-/* Directly colour the filled portion regardless of which variable it reads */
 [data-testid="playback-progressbar"] [style*="width"],
 [data-testid="playback-progressbar"] [style*="transform"] {{
   background-color: {acc} !important;
-}}
-
-/* ── Active / selected accents ───────────────────────────────── */
-[data-testid="now-playing-widget"] [aria-label] span,
-[class*="activeindicator" i] {{
-  color: {acc} !important;
-  fill: {acc} !important;
 }}
 """
 

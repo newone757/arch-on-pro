@@ -154,21 +154,14 @@ try:
     neg    = get(content, 'color1',     '#e22134')
     pos    = get(content, 'color2',     '#1db954')
 
+    # Extract full ANSI palette for semantic Spicetify-style mapping
+    colors = {f'color{i}': get(content, f'color{i}', bg if i == 0 else fg) for i in range(16)}
+
     out = {
-        'background_base':             bg,
-        'background_highlight':        lighten(bg, 0.12),
-        'background_press':            lighten(bg, 0.18),
-        'background_elevated_base':    lighten(bg, 0.22),
-        'background_elevated_highlight': lighten(bg, 0.30),
-        'background_tinted_base':      mix(accent, bg, 0.15),
-        'background_tinted_highlight': mix(accent, bg, 0.22),
-        'text_base':                   fg,
-        'text_subdued':                mix(fg, bg, 0.55),
-        'accent':                      accent,
-        'positive':                    pos,
-        'negative':                    neg,
-        'decorative_base':             mix(fg, bg, 0.35),
-        'decorative_subdued':          mix(fg, bg, 0.15),
+        **colors,
+        'background':  bg,
+        'foreground':  fg,
+        'accent':      accent,
     }
 
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
