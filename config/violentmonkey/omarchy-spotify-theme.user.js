@@ -6,9 +6,8 @@
 // @run-at       document-start
 // ==/UserScript==
 
-// Path to the theme JSON written by the Omarchy theme-set hook.
-// Update this if your home directory differs.
-const THEME_FILE = 'file:///home/lonnie/.config/omarchy/current/spotify-theme.json';
+// Theme JSON served by omarchy-theme-server (systemd user service on port 7842).
+const THEME_FILE = 'http://localhost:7842/';
 
 const STYLE_ID = 'omarchy-spotify-theme';
 

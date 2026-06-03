@@ -1,0 +1,11 @@
+[Unit]
+Description=Omarchy theme server (serves theme JSON for Violentmonkey)
+After=graphical-session.target
+
+[Service]
+ExecStart=%h/.local/bin/omarchy-theme-server
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target
