@@ -9,6 +9,12 @@ Starting from scratch? See [docs/armarchy-m1-install-guide.md](docs/armarchy-m1-
 ## What's here
 
 ```
+bin/
+├── auto-brightness         # ALS auto-brightness daemon (see setup-auto-brightness)
+├── setup-auto-brightness   # Installs auto-brightness + systemd service
+├── setup-brave             # Automates fresh Brave install setup
+└── omarchy-icons-apply-color  # Recolors OmarchyIcons folder SVGs
+
 config/
 ├── hypr/
 │   ├── hyprland.conf       # Source order, env vars, lid switch suspend
@@ -17,6 +23,8 @@ config/
 │   ├── looknfeel.conf      # Gaps, borders, animations, scrolling layout config
 │   ├── monitors.conf       # Display scale (2x) and VRR — tuned for 16" retina
 │   └── scripts/            # Gesture scripts for scrolling layout navigation
+├── systemd/user/
+│   └── auto-brightness.service  # Systemd user service for ALS auto-brightness
 ├── omarchy/
 │   ├── hooks/theme-set     # Syncs theme files and reloads Hyprland after theme change
 │   └── branding/about.txt  # Custom ASCII logo for fastfetch
@@ -65,6 +73,14 @@ Symlink or copy what you need into `~/.config/`. The scripts need to be executab
 chmod +x config/hypr/scripts/*
 chmod +x config/omarchy/hooks/theme-set
 ```
+
+**Auto-brightness** (ambient light sensor → display brightness):
+
+```bash
+./bin/setup-auto-brightness
+```
+
+Installs `iio-sensor-proxy`, drops the script into `~/.local/bin/`, and enables the systemd user service. Requires the `aop_als` kernel module (included in Asahi 6.19+).
 
 ---
 

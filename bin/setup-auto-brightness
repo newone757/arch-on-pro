@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+
+echo "==> Installing iio-sensor-proxy..."
+sudo pacman -S --needed --noconfirm iio-sensor-proxy
+
+echo "==> Installing auto-brightness script..."
+mkdir -p ~/.local/bin
+cp "$REPO_ROOT/bin/auto-brightness" ~/.local/bin/auto-brightness
+chmod +x ~/.local/bin/auto-brightness
+
+echo "==> Installing systemd user service..."
+mkdir -p ~/.config/systemd/user
+cp "$REPO_ROOT/config/systemd/user/auto-brightness.service" \
+   ~/.config/systemd/user/auto-brightness.service
+
+echo "==> Enabling and starting service..."
+systemctl --user daemon-reload
+systemctl --user enable --now auto-brightness.service
+
+echo "==> Done. Status:"
+systemctl --user status auto-brightness.service --no-pager
