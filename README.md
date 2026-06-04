@@ -50,6 +50,11 @@ config/
 │   └── config.jsonc        # System info layout with hardware/software/uptime sections
 └── waybar/                 # Status bar layout and styles
 
+local/share/applications/
+├── Lightroom CC.desktop    # Webapp shortcut (shows in Walker launcher)
+└── icons/
+    └── Lightroom CC.png    # 128x128 icon for the above
+
 docs/
 └── armarchy-m1-install-guide.md
 ```
@@ -103,7 +108,7 @@ git clone https://github.com/newone757/arch-on-pro.git
 cd arch-on-pro
 ```
 
-Symlink or copy what you need into `~/.config/`. The scripts need to be executable:
+Symlink or copy what you need into `~/.config/`. Copy `local/` into `~/.local/`. The scripts need to be executable:
 
 ```bash
 chmod +x config/hypr/scripts/*

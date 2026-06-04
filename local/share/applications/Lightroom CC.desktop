@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Name=Lightroom CC
+Comment=Lightroom CC
+Exec=omarchy-launch-webapp https://lightroom.adobe.com/home
+Terminal=false
+Type=Application
+Icon=/home/lonnie/.local/share/applications/icons/Lightroom CC.png
+StartupNotify=true
