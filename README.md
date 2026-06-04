@@ -14,13 +14,24 @@ bin/
 ├── setup-auto-brightness   # Installs auto-brightness + systemd service
 ├── setup-asahi-audio-tune  # Applies custom speaker tuning + pacman hook
 ├── setup-brave             # Automates fresh Brave install setup
+├── setup-titdb             # Installs TITDB palm/edge rejection daemon
 └── omarchy-icons-apply-color  # Recolors OmarchyIcons folder SVGs
 
 usr/share/asahi-audio/j316/
 └── graph.json              # Tuned speaker DSP (Bankstown bass amt reduced)
 
-etc/pacman.d/hooks/
-└── asahi-audio-tune.hook   # Re-applies tuning after asahi-audio upgrades
+etc/
+├── modprobe.d/
+│   └── hid_apple.conf               # fnmode=1: media keys default, fn for F-keys
+├── modules-load.d/
+│   └── uinput.conf                  # Load uinput module at boot (required by titdb)
+├── pacman.d/hooks/
+│   └── asahi-audio-tune.hook        # Re-applies tuning after asahi-audio upgrades
+├── systemd/system/titdb.service.d/
+│   └── override.conf                # Pins device path + flex mode for titdb
+└── udev/rules.d/
+    ├── 99-hide-macos-partitions.rules
+    └── 99-uinput.rules              # Grants uinput group access to /dev/uinput
 
 config/
 ├── hypr/
@@ -53,9 +64,17 @@ docs/
 
 **Theme hook** — `config/omarchy/hooks/theme-set` copies `waybar.css` and the theme's Hyprland conf into stable files so switching wallpapers with Aether doesn't clobber your theme colors. It also ensures Hyprland reloads *after* those files are written, fixing a timing bug in the default flow where the reload fires before the hook runs.
 
-**3-finger gestures** — swipe left/right cycles window focus, up/down moves focus vertically. In scrolling layout (`Super+L`), left/right uses `layoutmsg focus` for proper viewport behavior rather than just moving focus. Wrapping at the ends is disabled.
+**Trackpad palm/edge rejection (titdb)** — the MacBook trackpad is large enough that thumbs and palm edges routinely fire accidental taps and cursor jumps. [TITDB](https://github.com/tascvh/trackpad-is-too-damn-big) runs as a system daemon, grabs the hardware device, and re-emits a virtual device with the edges dead-zoned. Flex mode is used so you can still slide into the edge from the active area and multitouch gestures work across the full pad. Runs as a systemd service at boot. See `setup-titdb` for install instructions.
 
-**4-finger gestures** — swipe left/right switches workspaces.
+**disable_while_typing** — `input.conf` enables Hyprland's built-in trackpad suppression while keys are held. Pairs with titdb for belt-and-suspenders coverage.
+
+**3-finger gestures** — up/down resizes columns in scrolling layout (`colresize ±2conf`). Left/right is unbound (previously cycled focus; freed up to avoid conflicts with browser swipe-back/forward).
+
+**4-finger gestures** — left/right navigates to the next/previous column in scrolling layout. Up/down switches workspaces. Wrapping at workspace ends is disabled.
+
+**Workspace animations** — `looknfeel.conf` replaces the disabled workspace animation with `slidevert` (vertical slide, speed 8) so workspace switching has visible direction. Matches the 4-finger up/down gesture.
+
+**Keybinding changes** — `Super+W` unbound from Typora and rebound to `omarchy-toggle-waybar` (hide/show the status bar). Theme menu moved from `Super+Shift+Ctrl+Space` to `Super+Shift+Space`. `Super+Shift+W` retains Typora.
 
 **Super+copy/paste/cut fix** — after a Hyprland update, `sendshortcut` silently does nothing without an explicit `activewindow` target. Super+C/V/X are overridden in `bindings.conf` with the corrected syntax.
 
@@ -106,6 +125,14 @@ Copies the tuned DSP config to `/etc/asahi-audio/j316/` and `/usr/share/asahi-au
 ```
 
 Installs `iio-sensor-proxy`, drops the script into `~/.local/bin/`, and enables the systemd user service. Requires the `aop_als` kernel module (included in Asahi 6.19+).
+
+**Trackpad palm/edge rejection** (suppresses accidental cursor jumps from large trackpad):
+
+```bash
+./bin/setup-titdb
+```
+
+Installs `titdb-git` from AUR, sets up the `uinput` group and udev rule, loads the `uinput` kernel module at boot, and enables the `titdb` systemd service. Runs in flex mode with left/right edges dead-zoned 10% and bottom 15%. To tune: edit `/etc/systemd/system/titdb.service.d/override.conf` and run `sudo systemctl restart titdb`.
 
 ---
 

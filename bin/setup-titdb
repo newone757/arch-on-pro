@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# Install and configure TITDB (trackpad-is-too-damn-big) to suppress accidental
+# edge/palm touches on the MacBook Pro trackpad.
+# https://github.com/tascvh/trackpad-is-too-damn-big
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Install from AUR
+if ! command -v titdb &>/dev/null; then
+    echo "Installing titdb-git from AUR..."
+    yay -S --noconfirm titdb-git
+else
+    echo "titdb already installed ($(titdb --version 2>/dev/null || echo "unknown version"))"
+fi
+
+# uinput group (needed for udev rule; service itself runs as root)
+if ! getent group uinput &>/dev/null; then
+    echo "Creating uinput system group..."
+    sudo groupadd --system uinput
+fi
+
+CURRENT_USER="$(whoami)"
+if ! groups "$CURRENT_USER" | grep -qw uinput; then
+    echo "Adding $CURRENT_USER to uinput group..."
+    sudo usermod -aG uinput "$CURRENT_USER"
+fi
+if ! groups "$CURRENT_USER" | grep -qw input; then
+    echo "Adding $CURRENT_USER to input group..."
+    sudo usermod -aG input "$CURRENT_USER"
+fi
+
+# udev rule so /dev/uinput is accessible to the uinput group
+echo "Installing udev rule..."
+sudo cp "$REPO_ROOT/etc/udev/rules.d/99-uinput.rules" /etc/udev/rules.d/99-uinput.rules
+sudo systemctl restart systemd-udevd.service
+
+# Ensure uinput kernel module loads at boot
+echo "Installing modules-load config..."
+sudo cp "$REPO_ROOT/etc/modules-load.d/uinput.conf" /etc/modules-load.d/uinput.conf
+sudo modprobe uinput 2>/dev/null || true
+
+# Systemd service override: pin the device path and use flex mode
+echo "Installing systemd service override..."
+sudo mkdir -p /etc/systemd/system/titdb.service.d
+sudo cp "$REPO_ROOT/etc/systemd/system/titdb.service.d/override.conf" \
+    /etc/systemd/system/titdb.service.d/override.conf
+sudo systemctl daemon-reload
+
+# Enable and start
+echo "Enabling titdb service..."
+sudo systemctl enable --now titdb.service
+sudo systemctl status titdb.service --no-pager -l
+
+echo ""
+echo "Done. titdb is running in flex mode (left/right 10%, bottom 15%)."
+echo ""
+echo "To tune edge percentages, edit:"
+echo "  /etc/systemd/system/titdb.service.d/override.conf"
+echo "Then: sudo systemctl restart titdb"
+echo ""
+echo "NOTE: Log out and back in for group membership changes to take effect"
+echo "      (the service runs as root so it works immediately without relogin)."
