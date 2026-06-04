@@ -7,6 +7,7 @@ Sysfs used for all reads (no subprocess); brightnessctl used for writes only.
 Eased ramping respects manual slider changes on the display; keyboard always auto.
 """
 
+import collections
 import glob
 import os
 import signal
@@ -34,6 +35,14 @@ SMOOTH_STEP_MAX    = 6      # max display units per cycle (eased, out of 500)
 
 LUX_CHANGE_PCT     = 75     # % lux change to resume after manual override
 LUX_CHANGE_MIN     = 5      # absolute lux floor for low-light override detection
+
+# Lux smoothing — rolling average to suppress TV/candle flicker
+LUX_SMOOTH_SAMPLES  = 150  # samples to average (~15s at 0.1s poll)
+# Low-light deadband — ignore small lux swings when dim (TV shimmer protection)
+LUX_DEADBAND_THRESH = 120  # lux; below this, require larger change to act
+LUX_DEADBAND_LOW    = 30   # min smoothed-lux delta required in low-light zone
+# Brightness target deadband — skip ramp if target is already close enough
+DISP_TARGET_DEADBAND = 15  # raw units (out of 500); ignore tiny target shifts
 
 MIN_BRIGHTNESS     = 10     # display floor (raw units)
 
@@ -210,15 +219,37 @@ def main():
     manual_override = False
     override_lux    = 0
     idle_cycles     = 0
+    lux_history     = collections.deque(maxlen=LUX_SMOOTH_SAMPLES)
+    applied_lux     = None   # smoothed lux at which we last computed disp_target
 
     while True:
         time.sleep(POLL_INTERVAL)
 
-        lux = read_sysfs_int(sensor_file)
-        if lux is None:
+        raw_lux = read_sysfs_int(sensor_file)
+        if raw_lux is None:
             continue
 
+        lux_history.append(raw_lux)
+        lux = int(round(sum(lux_history) / len(lux_history)))
+
+        # Low-light deadband: suppress tiny swings from TV / candle flicker
+        if (applied_lux is not None
+                and lux < LUX_DEADBAND_THRESH
+                and abs(lux - applied_lux) < LUX_DEADBAND_LOW):
+            # Still update keyboard (less distracting) but skip display recalc
+            if kb_avail and not manual_override:
+                kb_target = lux_to_target(lux, KB_CURVE, kb_max_val, KB_MIN_BRIGHTNESS)
+                if kb_cur != kb_target:
+                    kb_cur = eased_step(kb_cur, kb_target, KB_SMOOTH_STEP_MAX)
+                    kb_set(kb_cur, kb_max_val)
+            continue
+
+        applied_lux = lux
         disp_target = lux_to_target(lux, LUX_CURVE, disp_max, MIN_BRIGHTNESS)
+
+        # Brightness target deadband: skip ramp for tiny target shifts
+        if abs(disp_target - disp_cur) <= DISP_TARGET_DEADBAND:
+            disp_target = disp_cur
 
         # Manual override detection — check when stable at target
         if idle_cycles >= 8:
