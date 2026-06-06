@@ -266,4 +266,53 @@ except Exception as e:
     print(f'zen-theme: {e}', file=sys.stderr)
 PYEOF
 
+# Override Brave BrowserThemeColor with actual background color
+# omarchy-theme-set-browser uses chromium.theme which can be too light/tinted.
+# Using the real background gives a toolbar that matches Nautilus/Zen.
+python3 << 'PYEOF'
+import re, os, json, subprocess
+
+theme_dir    = os.path.expanduser('~/.config/omarchy/current/theme')
+policy_file  = '/etc/brave/policies/managed/color.json'
+
+def get_toml(content, key, fallback):
+    m = re.search(rf'^{key}\s*=\s*"(#[0-9a-fA-F]{{6}})"', content, re.MULTILINE)
+    return m.group(1) if m else fallback
+
+def get_alacritty(content, section, key, fallback):
+    m = re.search(rf'\[colors\.{section}\].*?{key}\s*=\s*"(#[0-9a-fA-F]{{6}})"', content, re.DOTALL)
+    return m.group(1) if m else fallback
+
+def hex_to_rgb(h):
+    h = h.lstrip('#')
+    return int(h[0:2],16), int(h[2:4],16), int(h[4:6],16)
+
+try:
+    colors_toml    = os.path.join(theme_dir, 'colors.toml')
+    alacritty_toml = os.path.join(theme_dir, 'alacritty.toml')
+
+    if os.path.exists(colors_toml):
+        with open(colors_toml) as f:
+            content = f.read()
+        bg = get_toml(content, 'background', '#1e1e2e')
+    elif os.path.exists(alacritty_toml):
+        with open(alacritty_toml) as f:
+            content = f.read()
+        bg = get_alacritty(content, 'primary', 'background', '#1e1e2e')
+    else:
+        raise FileNotFoundError('no colors file found')
+
+    r, g, b = hex_to_rgb(bg)
+    policy = {"BrowserThemeColor": f"rgb({r},{g},{b})", "BrowserColorScheme": "dark"}
+
+    with open(policy_file, 'w') as f:
+        json.dump(policy, f)
+
+    subprocess.Popen(['brave', '--refresh-platform-policy', '--no-startup-window'],
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+except Exception as e:
+    import sys
+    print(f'brave-theme: {e}', file=sys.stderr)
+PYEOF
+
 
