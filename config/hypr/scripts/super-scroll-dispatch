@@ -117,7 +117,7 @@ def watch():
                     avg_delta = sum(deltas) / len(deltas)
                     _scroll_accum += avg_delta
                     if abs(_scroll_accum) >= SCROLL_THRESHOLD:
-                        fire_scroll('r' if _scroll_accum > 0 else 'l')
+                        fire_scroll('l' if _scroll_accum > 0 else 'r')
                     _pinch_accum = 0.0
                     _prev_dist = None
 
@@ -126,7 +126,7 @@ def watch():
                 avg_delta = sum(slot_x_delta.values()) / len(slot_x_delta)
                 _scroll_accum += avg_delta
                 if abs(_scroll_accum) >= SCROLL_THRESHOLD:
-                    fire_scroll('r' if _scroll_accum > 0 else 'l')
+                    fire_scroll('l' if _scroll_accum > 0 else 'r')
                 _pinch_accum = 0.0
                 _prev_dist = None
 
