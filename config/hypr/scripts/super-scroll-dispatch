@@ -1,138 +1,133 @@
 #!/usr/bin/env python3
 """
-super-scroll-dispatch: converts Super + two-finger trackpad scroll into
-hyprctl dispatches (movefocus l/r for scrolling layout navigation).
-
-When Super is held, exclusively grabs the trackpad so scroll events
-don't reach Hyprland window content. Released on Super up.
+Trackpad gesture daemon:
+  - 4-finger horizontal scroll → navigate columns (scrolling layout) or cyclenext
+  - 2-finger pinch             → resize current column (spread = wider, pinch = narrower)
 """
 
-import threading
+import json
 import subprocess
 import time
 import sys
-import atexit
 import evdev
 from evdev import ecodes as e
 
-TRACKPAD_DEV = '/dev/input/event4'
-KEYBOARD_DEV = '/dev/input/event1'
-SUPER_KEYS   = {125, 126}   # KEY_LEFTMETA, KEY_RIGHTMETA
-THRESHOLD    = 25
-COOLDOWN     = 0.08
-LOG          = '/tmp/super-scroll.log'
+TRACKPAD_DEV     = '/dev/input/event4'
 
-_lock        = threading.Lock()
-_super_held  = False
-_accum       = 0.0
-_last_fire   = 0.0
-_pad         = None   # shared so keyboard thread can grab/ungrab
-_grabbed     = False
+# 4-finger scroll tuning
+SCROLL_THRESHOLD = 225
+SCROLL_COOLDOWN  = 0.16
 
+# 2-finger pinch tuning
+PINCH_THRESHOLD  = 300   # X-distance change before firing
+PINCH_COOLDOWN   = 0.3
 
-def log(msg):
-    with open(LOG, 'a') as f:
-        f.write(f'{time.monotonic():.2f} {msg}\n')
+_scroll_accum = 0.0
+_scroll_last  = 0.0
+_pinch_accum  = 0.0
+_pinch_last   = 0.0
+_prev_dist    = None   # previous finger spread distance
 
 
-def set_grab(grab: bool):
-    global _grabbed
-    if _pad is None:
-        return
-    if grab and not _grabbed:
-        try:
-            _pad.grab()
-            _grabbed = True
-            log('grabbed trackpad')
-        except Exception as ex:
-            log(f'grab error: {ex}')
-    elif not grab and _grabbed:
-        try:
-            _pad.ungrab()
-            _grabbed = False
-            log('ungrabbed trackpad')
-        except Exception as ex:
-            log(f'ungrab error: {ex}')
-
-
-def watch_keyboard():
-    global _super_held
+def get_layout():
     try:
-        kbd = evdev.InputDevice(KEYBOARD_DEV)
-        log(f'kbd opened: {kbd.name}')
-        for ev in kbd.read_loop():
-            if ev.type == e.EV_KEY and ev.code in SUPER_KEYS:
-                held = ev.value != 0
-                with _lock:
-                    _super_held = held
-                set_grab(held)
-                log(f'super_held={held}')
-    except Exception as ex:
-        log(f'kbd error: {ex}')
+        r = subprocess.run(['hyprctl', 'activeworkspace', '-j'],
+                           capture_output=True, text=True)
+        return json.loads(r.stdout).get('tiledLayout', '')
+    except Exception:
+        return ''
 
 
-def fire(direction):
-    global _accum, _last_fire
+def fire_scroll(direction):
+    global _scroll_accum, _scroll_last
     now = time.monotonic()
-    with _lock:
-        if now - _last_fire < COOLDOWN:
-            return
-        _last_fire = now
-        _accum = 0.0
-    log(f'dispatch movefocus {direction}')
-    subprocess.Popen(['hyprctl', 'dispatch', 'layoutmsg', f'focus {direction}'])
+    if now - _scroll_last < SCROLL_COOLDOWN:
+        return
+    _scroll_last = now
+    _scroll_accum = 0.0
+    if get_layout() == 'scrolling':
+        subprocess.Popen(['hyprctl', 'dispatch', 'layoutmsg', f'focus {direction}'])
+    else:
+        arg = ['prev'] if direction == 'l' else []
+        subprocess.Popen(['hyprctl', 'dispatch', 'cyclenext'] + arg)
 
 
-def watch_scroll():
-    global _pad, _accum
+def fire_pinch(expand):
+    global _pinch_accum, _pinch_last
+    now = time.monotonic()
+    if now - _pinch_last < PINCH_COOLDOWN:
+        return
+    _pinch_last = now
+    _pinch_accum = 0.0
+    cmd = 'colresize +0.1' if expand else 'colresize -0.1'
+    subprocess.Popen(['hyprctl', 'dispatch', 'layoutmsg', cmd])
+
+
+def watch():
+    global _scroll_accum, _pinch_accum, _prev_dist
     try:
-        _pad = evdev.InputDevice(TRACKPAD_DEV)
-        log(f'pad opened: {_pad.name}')
+        pad = evdev.InputDevice(TRACKPAD_DEV)
     except Exception as ex:
-        log(f'pad error: {ex}')
+        print(f'pad error: {ex}')
         sys.exit(1)
-
-    atexit.register(lambda: set_grab(False))
 
     slots        = {}
     cur_slot     = 0
-    slot_y_delta = {}
+    slot_x_delta = {}
 
-    for ev in _pad.read_loop():
+    for ev in pad.read_loop():
         if ev.type == e.EV_ABS:
             if ev.code == e.ABS_MT_SLOT:
                 cur_slot = ev.value
             elif ev.code == e.ABS_MT_TRACKING_ID:
                 if ev.value == -1:
                     slots.pop(cur_slot, None)
+                    if len(slots) < 2:
+                        _prev_dist = None
                 else:
-                    slots[cur_slot] = {'id': ev.value, 'y': None}
-            elif ev.code == e.ABS_MT_POSITION_Y:
+                    slots[cur_slot] = {'id': ev.value, 'x': None}
+            elif ev.code == e.ABS_MT_POSITION_X:
                 if cur_slot in slots:
-                    prev = slots[cur_slot]['y']
+                    prev = slots[cur_slot]['x']
                     if prev is not None:
-                        slot_y_delta[cur_slot] = ev.value - prev
-                    slots[cur_slot]['y'] = ev.value
+                        slot_x_delta[cur_slot] = ev.value - prev
+                    slots[cur_slot]['x'] = ev.value
 
         elif ev.type == e.EV_SYN and ev.code == e.SYN_REPORT:
-            if len(slots) >= 2 and slot_y_delta:
-                avg_delta = sum(slot_y_delta.values()) / len(slot_y_delta)
-                to_fire = None
-                with _lock:
-                    if _super_held:
-                        _accum += avg_delta
-                        if abs(_accum) >= THRESHOLD:
-                            to_fire = 'r' if _accum > 0 else 'l'
-                    else:
-                        _accum = 0.0
-                if to_fire:
-                    fire(to_fire)
-            slot_y_delta.clear()
+            n = len(slots)
+
+            if n == 3 and slot_x_delta:
+                deltas = list(slot_x_delta.values())
+                has_positive = any(d > 0 for d in deltas)
+                has_negative = any(d < 0 for d in deltas)
+                xs = [s['x'] for s in slots.values() if s['x'] is not None]
+
+                if has_positive and has_negative:
+                    # 3-finger pinch → column resize
+                    if len(xs) == 3:
+                        spread = max(xs) - min(xs)
+                        if _prev_dist is not None:
+                            _pinch_accum += spread - _prev_dist
+                            if abs(_pinch_accum) >= PINCH_THRESHOLD:
+                                fire_pinch(_pinch_accum > 0)
+                        _prev_dist = spread
+                    _scroll_accum = 0.0
+                else:
+                    # 3-finger horizontal swipe → column navigation
+                    avg_delta = sum(deltas) / len(deltas)
+                    _scroll_accum += avg_delta
+                    if abs(_scroll_accum) >= SCROLL_THRESHOLD:
+                        fire_scroll('r' if _scroll_accum > 0 else 'l')
+                    _pinch_accum = 0.0
+                    _prev_dist = None
+
+            else:
+                _scroll_accum = 0.0
+                _pinch_accum  = 0.0
+                _prev_dist    = None
+
+            slot_x_delta.clear()
 
 
 if __name__ == '__main__':
-    open(LOG, 'w').close()
-    log('starting')
-    t = threading.Thread(target=watch_keyboard, daemon=True)
-    t.start()
-    watch_scroll()
+    watch()
