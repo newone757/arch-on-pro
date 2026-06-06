@@ -121,6 +121,15 @@ def watch():
                     _pinch_accum = 0.0
                     _prev_dist = None
 
+            elif n >= 4 and slot_x_delta:
+                # 4-finger horizontal swipe → column navigation
+                avg_delta = sum(slot_x_delta.values()) / len(slot_x_delta)
+                _scroll_accum += avg_delta
+                if abs(_scroll_accum) >= SCROLL_THRESHOLD:
+                    fire_scroll('r' if _scroll_accum > 0 else 'l')
+                _pinch_accum = 0.0
+                _prev_dist = None
+
             else:
                 _scroll_accum = 0.0
                 _pinch_accum  = 0.0
