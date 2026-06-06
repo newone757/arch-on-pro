@@ -1,0 +1,76 @@
+#!/bin/bash
+# Sets up Zen Browser (twilight) with omarchy theme integration,
+# Widevine DRM, WebRender, and the super-scroll-dispatch gesture daemon.
+# Safe to run on a fresh install or re-run to repair.
+
+set -e
+
+echo "Setting up Zen Browser..."
+
+# Install Zen if missing
+if ! command -v zen-browser-twilight &>/dev/null; then
+    echo "Installing zen-browser-twilight-bin (aarch64)..."
+    omarchy-pkg-aur-add zen-browser-twilight-bin
+fi
+
+# Add user to input group (needed for super-scroll-dispatch to read trackpad)
+if ! groups "$USER" | grep -q '\binput\b'; then
+    echo "Adding $USER to input group..."
+    sudo usermod -aG input "$USER"
+    echo "Note: log out and back in for group to take effect."
+fi
+
+# Find the twilight profile directory
+ZEN_DIR="$HOME/.config/zen"
+PROFILE_DIR=$(find "$ZEN_DIR" -maxdepth 1 -name "*.Default*twilight*" -type d 2>/dev/null | head -1)
+
+if [[ -z "$PROFILE_DIR" ]]; then
+    echo "Zen twilight profile not found — launch Zen once first to create it, then re-run this script."
+    exit 1
+fi
+
+echo "Found profile: $PROFILE_DIR"
+
+# Write user.js preferences
+CHROME_DIR="$PROFILE_DIR/chrome"
+mkdir -p "$CHROME_DIR"
+
+cat > "$PROFILE_DIR/user.js" <<'EOF'
+user_pref("toolkit.legacyUserProfileCustomizations.stylesheets", true);
+user_pref("media.gmp-widevinecdm.visible", true);
+user_pref("media.gmp-widevinecdm.enabled", true);
+user_pref("media.gmp.storage.path", "/opt/WidevineCdm/firefox/gmp-widevinecdm");
+user_pref("gfx.webrender.all", true);
+user_pref("widget.wayland.use-dmabuf-backbuffer", true);
+user_pref("media.hardware-video-decoding.enabled", true);
+EOF
+echo "user.js written."
+
+# Install omarchy theme hook output (userChrome.css generated on theme switch)
+# Trigger it now to generate initial userChrome.css
+if command -v omarchy-hook &>/dev/null; then
+    THEME=$(cat "$HOME/.config/omarchy/current/theme.name" 2>/dev/null || echo "")
+    if [[ -n "$THEME" ]]; then
+        echo "Generating userChrome.css for theme: $THEME"
+        omarchy-hook theme-set "$THEME" 2>/dev/null || true
+    fi
+fi
+
+# Install and enable super-scroll-dispatch service
+SERVICE_DIR="$HOME/.config/systemd/user"
+mkdir -p "$SERVICE_DIR"
+
+SCRIPT_SRC="$(dirname "$0")/../config/hypr/scripts/super-scroll-dispatch"
+SERVICE_SRC="$(dirname "$0")/../config/systemd/user/super-scroll-dispatch.service"
+
+cp "$SCRIPT_SRC" "$HOME/.config/hypr/scripts/super-scroll-dispatch"
+chmod +x "$HOME/.config/hypr/scripts/super-scroll-dispatch"
+cp "$SERVICE_SRC" "$SERVICE_DIR/super-scroll-dispatch.service"
+
+systemctl --user daemon-reload
+systemctl --user enable --now super-scroll-dispatch
+echo "super-scroll-dispatch service enabled."
+
+echo ""
+echo "Done. Restart Zen for user.js changes to take effect."
+echo "In Zen, also go to about:addons → Plugins to verify Widevine is listed."

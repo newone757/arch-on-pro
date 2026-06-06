@@ -196,4 +196,74 @@ except Exception as e:
     print(f'spotify-theme: {e}', file=sys.stderr)
 PYEOF
 
+# Generate Zen Browser userChrome.css from current theme colors
+python3 << 'PYEOF'
+import re, os
+
+theme_dir   = os.path.expanduser('~/.config/omarchy/current/theme')
+chrome_dir  = os.path.expanduser('~/.config/zen/wgqgmyn5.Default (twilight)/chrome')
+output_file = os.path.join(chrome_dir, 'userChrome.css')
+
+def get_toml(content, key, fallback):
+    m = re.search(rf'^{key}\s*=\s*"(#[0-9a-fA-F]{{6}})"', content, re.MULTILINE)
+    return m.group(1) if m else fallback
+
+def get_alacritty(content, section, key, fallback):
+    m = re.search(rf'\[colors\.{section}\].*?{key}\s*=\s*"(#[0-9a-fA-F]{{6}})"', content, re.DOTALL)
+    return m.group(1) if m else fallback
+
+try:
+    colors_toml    = os.path.join(theme_dir, 'colors.toml')
+    alacritty_toml = os.path.join(theme_dir, 'alacritty.toml')
+
+    if os.path.exists(colors_toml):
+        with open(colors_toml) as f:
+            content = f.read()
+        accent = get_toml(content, 'accent',     '#89b4fa')
+        bg     = get_toml(content, 'background', '#1e1e2e')
+    elif os.path.exists(alacritty_toml):
+        with open(alacritty_toml) as f:
+            content = f.read()
+        bg     = get_alacritty(content, 'primary', 'background', '#1e1e2e')
+        # Use color4 (blue/accent) or color5 (magenta) as accent fallback chain
+        accent = (get_alacritty(content, 'normal', 'blue',    '') or
+                  get_alacritty(content, 'normal', 'magenta', '') or
+                  get_alacritty(content, 'normal', 'cyan',    '') or
+                  '#89b4fa')
+    else:
+        raise FileNotFoundError('no colors.toml or alacritty.toml found')
+
+    sidebar_bg  = f"color-mix(in srgb, {accent} 12%, {bg} 88%)"
+    panel_bg    = f"color-mix(in srgb, {accent} 25%, {bg} 75%)"
+    urlbar_bg   = f"color-mix(in srgb, {accent} 10%, {bg} 90%)"
+
+    css = f"""/* Omarchy theme — auto-generated, do not edit */
+:root {{
+    --zen-primary-color: {accent} !important;
+    --zen-branding-dark: {bg} !important;
+    --zen-main-browser-background: {sidebar_bg} !important;
+    --zen-navigator-toolbox-background: {sidebar_bg} !important;
+    --zen-colors-primary: {panel_bg} !important;
+    --zen-colors-secondary: color-mix(in srgb, {accent} 12%, {bg} 88%) !important;
+    --zen-loading-progress-bar-color: {accent} !important;
+    --zen-urlbar-background: {urlbar_bg} !important;
+    --toolbar-bgcolor: {sidebar_bg} !important;
+}}
+
+.zen-browser-generic-background::after,
+.zen-browser-generic-background.zen-toolbar-background::after {{
+    background: {sidebar_bg} !important;
+}}
+
+#navigator-toolbox {{
+    background: {sidebar_bg} !important;
+}}
+"""
+    with open(output_file, 'w') as f:
+        f.write(css)
+except Exception as e:
+    import sys
+    print(f'zen-theme: {e}', file=sys.stderr)
+PYEOF
+
 
