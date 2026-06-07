@@ -15,7 +15,7 @@ from evdev import ecodes as e
 TRACKPAD_DEV     = '/dev/input/event4'
 
 # 4-finger scroll tuning
-SCROLL_THRESHOLD = 225
+SCROLL_THRESHOLD = 300
 SCROLL_COOLDOWN  = 0.16
 
 # 2-finger pinch tuning
