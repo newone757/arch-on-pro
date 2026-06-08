@@ -238,10 +238,13 @@ def watch():
 
             elif n == 5:
                 # 5-finger pinch → column resize
+                # Require all 5 slots actively moving to avoid 4-finger swipe + palm misfires.
+                active5 = sum(1 for k in slots
+                              if abs(slot_x_delta.get(k, 0)) + abs(slot_y_delta.get(k, 0)) >= 40)
                 x_deltas = list(slot_x_delta.values())
                 has_pos = any(d > 0 for d in x_deltas)
                 has_neg = any(d < 0 for d in x_deltas)
-                if x_deltas and has_pos and has_neg:
+                if active5 == 5 and x_deltas and has_pos and has_neg:
                     xs = [s['x'] for s in slots.values() if s['x'] is not None]
                     if len(xs) == 5:
                         spread = max(xs) - min(xs)
