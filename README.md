@@ -48,6 +48,8 @@ config/
 │   └── branding/about.txt  # Custom ASCII logo for fastfetch
 ├── fastfetch/
 │   └── config.jsonc        # System info layout with hardware/software/uptime sections
+├── waypaper/
+│   └── config.ini          # Wallpaper picker config (backend: swaybg, folder: ~/Wallpapers)
 └── waybar/                 # Status bar layout and styles
 
 local/share/applications/
@@ -98,6 +100,8 @@ docs/
 **Speaker tuning** — `asahi-audio` is installed and provides the j316 DSP pipeline, but the default Bankstown bass enhancement (`amt: 1.8`) is too aggressive on this hardware. `usr/share/asahi-audio/j316/graph.json` reduces it to `1.0` for tighter, less muddy low end. A pacman hook keeps the tuning in place after `asahi-audio` upgrades.
 
 **Fastfetch branding** — `branding/about.txt` uses the built-in Arch Linux ASCII logo (two-tone red/blue) with block-style "ARM" text beneath it, replacing the default Omarchy logo.
+
+**Waypaper** — GUI wallpaper picker (`yay -S waypaper`). Config sets backend to `swaybg` (matching omarchy's default), wallpaper folder to `~/Wallpapers`, and 3-column grid. Scroll speed boosted via `scroll_touchpad 3.0` in `input.conf`.
 
 ---
 
