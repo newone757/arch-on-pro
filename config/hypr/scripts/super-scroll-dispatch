@@ -4,7 +4,6 @@ Trackpad gesture daemon:
   - 4-finger horizontal scroll → navigate columns (scrolling layout) or cyclenext
   - 3-finger horizontal swipe  → browser tab next/prev (Ctrl+Tab / Ctrl+Shift+Tab)
   - 3-finger vertical swipe    → browser tab close/new (Ctrl+W / Ctrl+T)
-  - 3-finger pinch             → resize current column (spread = wider, pinch = narrower)
 """
 
 import json
@@ -17,14 +16,14 @@ from evdev import ecodes as e
 TRACKPAD_DEV     = '/dev/input/event4'
 
 # 4-finger column nav tuning
-SCROLL_THRESHOLD = 300
-SCROLL_COOLDOWN  = 0.16
+SCROLL_THRESHOLD = 450
+SCROLL_COOLDOWN  = 0.2
 
 # 3-finger browser tab tuning
 TAB_THRESHOLD    = 300
 TAB_COOLDOWN     = 0.4
 
-# 3-finger pinch tuning
+# 5-finger pinch → column resize tuning
 PINCH_THRESHOLD  = 300
 PINCH_COOLDOWN   = 0.3
 
@@ -48,12 +47,11 @@ def get_layout():
 
 
 def fire_scroll(direction):
-    global _scroll_accum, _scroll_last
+    global _scroll_last
     now = time.monotonic()
     if now - _scroll_last < SCROLL_COOLDOWN:
         return
     _scroll_last = now
-    _scroll_accum = 0.0
     if get_layout() == 'scrolling':
         subprocess.Popen(['hyprctl', 'dispatch', 'layoutmsg', f'focus {direction}'])
     else:
@@ -109,8 +107,6 @@ def watch():
             elif ev.code == e.ABS_MT_TRACKING_ID:
                 if ev.value == -1:
                     slots.pop(cur_slot, None)
-                    if len(slots) < 2:
-                        _prev_dist = None
                 else:
                     slots[cur_slot] = {'id': ev.value, 'x': None, 'y': None}
             elif ev.code == e.ABS_MT_POSITION_X:
@@ -132,51 +128,50 @@ def watch():
             if n == 3:
                 x_deltas = list(slot_x_delta.values())
                 y_deltas = list(slot_y_delta.values())
-                has_pos_x = any(d > 0 for d in x_deltas)
-                has_neg_x = any(d < 0 for d in x_deltas)
 
-                if x_deltas and has_pos_x and has_neg_x:
-                    # 3-finger pinch → column resize
-                    xs = [s['x'] for s in slots.values() if s['x'] is not None]
-                    if len(xs) == 3:
-                        spread = max(xs) - min(xs)
-                        if _prev_dist is not None:
-                            _pinch_accum += spread - _prev_dist
-                            if abs(_pinch_accum) >= PINCH_THRESHOLD:
-                                fire_pinch(_pinch_accum > 0)
-                        _prev_dist = spread
-                    _tab_accum_x = 0.0
-                    _tab_accum_y = 0.0
-                elif x_deltas or y_deltas:
-                    # Determine dominant axis to avoid diagonal misfires
+                if x_deltas or y_deltas:
                     avg_x = sum(x_deltas) / len(x_deltas) if x_deltas else 0
                     avg_y = sum(y_deltas) / len(y_deltas) if y_deltas else 0
 
                     if abs(avg_x) >= abs(avg_y):
                         # 3-finger horizontal → browser tab next/prev
-                        # positive accum = swipe right = previous tab (natural scroll)
                         _tab_accum_x += avg_x
                         if abs(_tab_accum_x) >= TAB_THRESHOLD:
                             fire_tab('prev' if _tab_accum_x > 0 else 'next')
                         _tab_accum_y = 0.0
                     else:
                         # 3-finger vertical → browser tab close/new
-                        # negative accum = swipe up = close; positive = swipe down = new
                         _tab_accum_y += avg_y
                         if abs(_tab_accum_y) >= TAB_THRESHOLD:
                             fire_tab('new' if _tab_accum_y > 0 else 'close')
                         _tab_accum_x = 0.0
+
+            elif n == 5:
+                # 5-finger pinch → column resize
+                x_deltas = list(slot_x_delta.values())
+                has_pos = any(d > 0 for d in x_deltas)
+                has_neg = any(d < 0 for d in x_deltas)
+                if x_deltas and has_pos and has_neg:
+                    xs = [s['x'] for s in slots.values() if s['x'] is not None]
+                    if len(xs) == 5:
+                        spread = max(xs) - min(xs)
+                        if _prev_dist is not None:
+                            _pinch_accum += spread - _prev_dist
+                            if abs(_pinch_accum) >= PINCH_THRESHOLD:
+                                fire_pinch(_pinch_accum > 0)
+                        _prev_dist = spread
+                else:
                     _pinch_accum = 0.0
-                    _prev_dist = None
+                    _prev_dist   = None
 
             elif n >= 4 and slot_x_delta:
-                # 4-finger horizontal swipe → column navigation
+                # 4-finger horizontal → column navigation, with velocity accumulation
                 avg_delta = sum(slot_x_delta.values()) / len(slot_x_delta)
                 _scroll_accum += avg_delta
-                if abs(_scroll_accum) >= SCROLL_THRESHOLD:
-                    fire_scroll('l' if _scroll_accum > 0 else 'r')
-                _pinch_accum = 0.0
-                _prev_dist = None
+                while abs(_scroll_accum) >= SCROLL_THRESHOLD:
+                    direction = 'l' if _scroll_accum > 0 else 'r'
+                    fire_scroll(direction)
+                    _scroll_accum -= SCROLL_THRESHOLD if _scroll_accum > 0 else -SCROLL_THRESHOLD
 
             else:
                 _scroll_accum = 0.0
