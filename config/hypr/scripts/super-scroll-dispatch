@@ -2,7 +2,9 @@
 """
 Trackpad gesture daemon:
   - 4-finger horizontal scroll → navigate columns (scrolling layout) or cyclenext
-  - 2-finger pinch             → resize current column (spread = wider, pinch = narrower)
+  - 3-finger horizontal swipe  → browser tab next/prev (Ctrl+Tab / Ctrl+Shift+Tab)
+  - 3-finger vertical swipe    → browser tab close/new (Ctrl+W / Ctrl+T)
+  - 3-finger pinch             → resize current column (spread = wider, pinch = narrower)
 """
 
 import json
@@ -14,19 +16,26 @@ from evdev import ecodes as e
 
 TRACKPAD_DEV     = '/dev/input/event4'
 
-# 4-finger scroll tuning
+# 4-finger column nav tuning
 SCROLL_THRESHOLD = 300
 SCROLL_COOLDOWN  = 0.16
 
-# 2-finger pinch tuning
-PINCH_THRESHOLD  = 300   # X-distance change before firing
+# 3-finger browser tab tuning
+TAB_THRESHOLD    = 300
+TAB_COOLDOWN     = 0.4
+
+# 3-finger pinch tuning
+PINCH_THRESHOLD  = 300
 PINCH_COOLDOWN   = 0.3
 
 _scroll_accum = 0.0
 _scroll_last  = 0.0
+_tab_accum_x  = 0.0
+_tab_accum_y  = 0.0
+_tab_last     = 0.0
 _pinch_accum  = 0.0
 _pinch_last   = 0.0
-_prev_dist    = None   # previous finger spread distance
+_prev_dist    = None
 
 
 def get_layout():
@@ -52,6 +61,23 @@ def fire_scroll(direction):
         subprocess.Popen(['hyprctl', 'dispatch', 'cyclenext'] + arg)
 
 
+def fire_tab(action):
+    global _tab_accum_x, _tab_accum_y, _tab_last
+    now = time.monotonic()
+    if now - _tab_last < TAB_COOLDOWN:
+        return
+    _tab_last = now
+    _tab_accum_x = 0.0
+    _tab_accum_y = 0.0
+    shortcuts = {
+        'next':  'CTRL, Tab, activewindow',
+        'prev':  'CTRL SHIFT, Tab, activewindow',
+        'close': 'CTRL, W, activewindow',
+        'new':   'CTRL, T, activewindow',
+    }
+    subprocess.Popen(['hyprctl', 'dispatch', 'sendshortcut', shortcuts[action]])
+
+
 def fire_pinch(expand):
     global _pinch_accum, _pinch_last
     now = time.monotonic()
@@ -64,7 +90,7 @@ def fire_pinch(expand):
 
 
 def watch():
-    global _scroll_accum, _pinch_accum, _prev_dist
+    global _scroll_accum, _tab_accum_x, _tab_accum_y, _pinch_accum, _prev_dist
     try:
         pad = evdev.InputDevice(TRACKPAD_DEV)
     except Exception as ex:
@@ -74,6 +100,7 @@ def watch():
     slots        = {}
     cur_slot     = 0
     slot_x_delta = {}
+    slot_y_delta = {}
 
     for ev in pad.read_loop():
         if ev.type == e.EV_ABS:
@@ -85,25 +112,32 @@ def watch():
                     if len(slots) < 2:
                         _prev_dist = None
                 else:
-                    slots[cur_slot] = {'id': ev.value, 'x': None}
+                    slots[cur_slot] = {'id': ev.value, 'x': None, 'y': None}
             elif ev.code == e.ABS_MT_POSITION_X:
                 if cur_slot in slots:
                     prev = slots[cur_slot]['x']
                     if prev is not None:
                         slot_x_delta[cur_slot] = ev.value - prev
                     slots[cur_slot]['x'] = ev.value
+            elif ev.code == e.ABS_MT_POSITION_Y:
+                if cur_slot in slots:
+                    prev = slots[cur_slot]['y']
+                    if prev is not None:
+                        slot_y_delta[cur_slot] = ev.value - prev
+                    slots[cur_slot]['y'] = ev.value
 
         elif ev.type == e.EV_SYN and ev.code == e.SYN_REPORT:
             n = len(slots)
 
-            if n == 3 and slot_x_delta:
-                deltas = list(slot_x_delta.values())
-                has_positive = any(d > 0 for d in deltas)
-                has_negative = any(d < 0 for d in deltas)
-                xs = [s['x'] for s in slots.values() if s['x'] is not None]
+            if n == 3:
+                x_deltas = list(slot_x_delta.values())
+                y_deltas = list(slot_y_delta.values())
+                has_pos_x = any(d > 0 for d in x_deltas)
+                has_neg_x = any(d < 0 for d in x_deltas)
 
-                if has_positive and has_negative:
+                if x_deltas and has_pos_x and has_neg_x:
                     # 3-finger pinch → column resize
+                    xs = [s['x'] for s in slots.values() if s['x'] is not None]
                     if len(xs) == 3:
                         spread = max(xs) - min(xs)
                         if _prev_dist is not None:
@@ -111,13 +145,27 @@ def watch():
                             if abs(_pinch_accum) >= PINCH_THRESHOLD:
                                 fire_pinch(_pinch_accum > 0)
                         _prev_dist = spread
-                    _scroll_accum = 0.0
-                else:
-                    # 3-finger horizontal swipe → column navigation
-                    avg_delta = sum(deltas) / len(deltas)
-                    _scroll_accum += avg_delta
-                    if abs(_scroll_accum) >= SCROLL_THRESHOLD:
-                        fire_scroll('l' if _scroll_accum > 0 else 'r')
+                    _tab_accum_x = 0.0
+                    _tab_accum_y = 0.0
+                elif x_deltas or y_deltas:
+                    # Determine dominant axis to avoid diagonal misfires
+                    avg_x = sum(x_deltas) / len(x_deltas) if x_deltas else 0
+                    avg_y = sum(y_deltas) / len(y_deltas) if y_deltas else 0
+
+                    if abs(avg_x) >= abs(avg_y):
+                        # 3-finger horizontal → browser tab next/prev
+                        # positive accum = swipe right = previous tab (natural scroll)
+                        _tab_accum_x += avg_x
+                        if abs(_tab_accum_x) >= TAB_THRESHOLD:
+                            fire_tab('prev' if _tab_accum_x > 0 else 'next')
+                        _tab_accum_y = 0.0
+                    else:
+                        # 3-finger vertical → browser tab close/new
+                        # negative accum = swipe up = close; positive = swipe down = new
+                        _tab_accum_y += avg_y
+                        if abs(_tab_accum_y) >= TAB_THRESHOLD:
+                            fire_tab('new' if _tab_accum_y > 0 else 'close')
+                        _tab_accum_x = 0.0
                     _pinch_accum = 0.0
                     _prev_dist = None
 
@@ -132,10 +180,13 @@ def watch():
 
             else:
                 _scroll_accum = 0.0
+                _tab_accum_x  = 0.0
+                _tab_accum_y  = 0.0
                 _pinch_accum  = 0.0
                 _prev_dist    = None
 
             slot_x_delta.clear()
+            slot_y_delta.clear()
 
 
 if __name__ == '__main__':
