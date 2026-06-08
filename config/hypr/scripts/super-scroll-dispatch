@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 """
 Trackpad gesture daemon:
-  - 4-finger horizontal scroll → navigate columns (scrolling layout) or cyclenext
-  - 3-finger horizontal swipe  → browser tab next/prev (Ctrl+Tab / Ctrl+Shift+Tab)
-  - 3-finger vertical swipe    → browser tab close/new (Ctrl+W / Ctrl+T)
+  - 2-finger horizontal swipe (Nautilus) → back/forward (Alt+Left/Right)
+  - 2-finger pinch (Nautilus)            → zoom (Ctrl+=/-)
+  - 3-finger horizontal swipe            → browser tab next/prev (Ctrl+Tab / Ctrl+Shift+Tab)
+  - 3-finger vertical swipe              → browser tab close/new (Ctrl+W / Ctrl+T)
+  - 4-finger horizontal scroll           → navigate columns (scrolling layout) or cyclenext
+  - 5-finger pinch                       → resize current column (colresize ±0.1)
 """
 
 import json
+import math
 import subprocess
 import time
 import sys
@@ -27,6 +31,14 @@ TAB_COOLDOWN     = 0.4
 PINCH_THRESHOLD  = 300
 PINCH_COOLDOWN   = 0.3
 
+# 2-finger Nautilus tuning
+NAV_THRESHOLD    = 400   # horizontal swipe to trigger back/forward
+NAV_COOLDOWN     = 0.5
+ZOOM_THRESHOLD   = 300   # pinch distance change to trigger zoom step
+ZOOM_COOLDOWN    = 0.25
+
+NAUTILUS_CLASSES = {'org.gnome.nautilus', 'nautilus'}
+
 _scroll_accum = 0.0
 _scroll_last  = 0.0
 _tab_accum_x  = 0.0
@@ -35,6 +47,11 @@ _tab_last     = 0.0
 _pinch_accum  = 0.0
 _pinch_last   = 0.0
 _prev_dist    = None
+_nav_accum    = 0.0
+_nav_last     = 0.0
+_zoom_accum   = 0.0
+_zoom_last    = 0.0
+_zoom_dist    = None
 
 
 def get_layout():
@@ -57,6 +74,37 @@ def fire_scroll(direction):
     else:
         arg = ['prev'] if direction == 'l' else []
         subprocess.Popen(['hyprctl', 'dispatch', 'cyclenext'] + arg)
+
+
+def get_active_class():
+    try:
+        r = subprocess.run(['hyprctl', 'activewindow', '-j'],
+                           capture_output=True, text=True)
+        return json.loads(r.stdout).get('class', '').lower()
+    except Exception:
+        return ''
+
+
+def fire_nav(direction):
+    global _nav_accum, _nav_last
+    now = time.monotonic()
+    if now - _nav_last < NAV_COOLDOWN:
+        return
+    _nav_last = now
+    _nav_accum = 0.0
+    shortcut = 'ALT, Left, activewindow' if direction == 'back' else 'ALT, Right, activewindow'
+    subprocess.Popen(['hyprctl', 'dispatch', 'sendshortcut', shortcut])
+
+
+def fire_zoom(expand):
+    global _zoom_accum, _zoom_last
+    now = time.monotonic()
+    if now - _zoom_last < ZOOM_COOLDOWN:
+        return
+    _zoom_last = now
+    _zoom_accum = 0.0
+    action = 'equal' if expand else 'minus'
+    subprocess.Popen(['hyprctl', 'dispatch', 'sendshortcut', f'CTRL, {action}, activewindow'])
 
 
 def fire_tab(action):
@@ -88,7 +136,7 @@ def fire_pinch(expand):
 
 
 def watch():
-    global _scroll_accum, _tab_accum_x, _tab_accum_y, _pinch_accum, _prev_dist
+    global _scroll_accum, _tab_accum_x, _tab_accum_y, _pinch_accum, _prev_dist, _nav_accum, _zoom_accum, _zoom_dist
     try:
         pad = evdev.InputDevice(TRACKPAD_DEV)
     except Exception as ex:
@@ -107,6 +155,8 @@ def watch():
             elif ev.code == e.ABS_MT_TRACKING_ID:
                 if ev.value == -1:
                     slots.pop(cur_slot, None)
+                    if len(slots) < 2:
+                        _zoom_dist = None
                 else:
                     slots[cur_slot] = {'id': ev.value, 'x': None, 'y': None}
             elif ev.code == e.ABS_MT_POSITION_X:
@@ -125,11 +175,51 @@ def watch():
         elif ev.type == e.EV_SYN and ev.code == e.SYN_REPORT:
             n = len(slots)
 
-            if n == 3:
+            if n == 2 and get_active_class() in NAUTILUS_CLASSES:
+                x_deltas = list(slot_x_delta.values())
+                y_deltas = list(slot_y_delta.values())
+                if len(x_deltas) == 2 and len(y_deltas) == 2:
+                    MIN_PINCH = 6
+                    opp_x = (x_deltas[0] * x_deltas[1] < 0 and
+                              all(abs(d) >= MIN_PINCH for d in x_deltas))
+                    opp_y = (y_deltas[0] * y_deltas[1] < 0 and
+                              all(abs(d) >= MIN_PINCH for d in y_deltas))
+                    if opp_x or opp_y:
+                        # Pinch → zoom
+                        xs = [s['x'] for s in slots.values() if s['x'] is not None]
+                        ys = [s['y'] for s in slots.values() if s['y'] is not None]
+                        if len(xs) == 2 and len(ys) == 2:
+                            dist = math.sqrt((xs[1]-xs[0])**2 + (ys[1]-ys[0])**2)
+                            if _zoom_dist is not None:
+                                _zoom_accum += dist - _zoom_dist
+                                if abs(_zoom_accum) >= ZOOM_THRESHOLD:
+                                    fire_zoom(_zoom_accum > 0)
+                            _zoom_dist = dist
+                        _nav_accum = 0.0
+                    else:
+                        # Translate — check for horizontal nav swipe
+                        avg_x = sum(x_deltas) / len(x_deltas)
+                        avg_y = sum(y_deltas) / len(y_deltas)
+                        if abs(avg_x) > abs(avg_y) * 2:
+                            _nav_accum += avg_x
+                            if abs(_nav_accum) >= NAV_THRESHOLD:
+                                fire_nav('back' if _nav_accum > 0 else 'forward')
+                        _zoom_accum = 0.0
+                        _zoom_dist  = None
+
+            elif n == 3:
                 x_deltas = list(slot_x_delta.values())
                 y_deltas = list(slot_y_delta.values())
 
-                if x_deltas or y_deltas:
+                # Require all 3 slots to be actively moving to ignore palm+2-finger false positives.
+                # A resting palm has near-zero delta per event; real fingers have much more.
+                MIN_SLOT_DELTA = 40
+                active = sum(1 for k in slots
+                             if abs(slot_x_delta.get(k, 0)) + abs(slot_y_delta.get(k, 0)) >= MIN_SLOT_DELTA)
+                if active < 3:
+                    _tab_accum_x = 0.0
+                    _tab_accum_y = 0.0
+                elif x_deltas or y_deltas:
                     avg_x = sum(x_deltas) / len(x_deltas) if x_deltas else 0
                     avg_y = sum(y_deltas) / len(y_deltas) if y_deltas else 0
 
@@ -179,6 +269,9 @@ def watch():
                 _tab_accum_y  = 0.0
                 _pinch_accum  = 0.0
                 _prev_dist    = None
+                _nav_accum    = 0.0
+                _zoom_accum   = 0.0
+                _zoom_dist    = None
 
             slot_x_delta.clear()
             slot_y_delta.clear()
