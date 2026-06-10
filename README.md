@@ -81,10 +81,10 @@ docs/
 Gestures handled by the daemon:
 - **2-finger horizontal (Nautilus)** → back/forward (`Alt+Left/Right`)
 - **2-finger pinch (Nautilus)** → zoom (`Ctrl+=/−`)
-- **3-finger horizontal** → browser tab next/prev (`Ctrl+Tab` / `Ctrl+Shift+Tab`)
-- **3-finger vertical** → browser tab close/new (`Ctrl+W` / `Ctrl+T`)
+- **3-finger vertical (right half of pad)** → resize current column (`colresize ±0.05`); up = wider, down = narrower
+- **3-finger horizontal (anywhere)** → browser tab next/prev (`Ctrl+Tab` / `Ctrl+Shift+Tab`)
+- **3-finger vertical (left half of pad)** → browser tab close/new (`Ctrl+W` / `Ctrl+T`)
 - **4-finger horizontal** → navigate columns in scrolling layout (or `cyclenext` otherwise)
-- **5-finger pinch** → resize current column (`colresize ±0.1`)
 
 4-finger vertical workspace switching is handled natively by Hyprland via `gesture = 4, vertical, workspace` in `input.conf`.
 

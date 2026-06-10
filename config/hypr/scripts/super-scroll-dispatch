@@ -3,6 +3,7 @@
 Trackpad gesture daemon:
   - 2-finger horizontal swipe (Nautilus) → back/forward (Alt+Left/Right)
   - 2-finger pinch (Nautilus)            → zoom (Ctrl+=/-)
+  - 3-finger vertical swipe (right edge) → resize current column (colresize ±0.05)
   - 3-finger horizontal swipe            → browser tab next/prev (Ctrl+Tab / Ctrl+Shift+Tab)
   - 3-finger vertical swipe              → browser tab close/new (Ctrl+W / Ctrl+T)
   - 4-finger horizontal scroll           → navigate columns (scrolling layout) or cyclenext
@@ -37,21 +38,28 @@ NAV_COOLDOWN     = 0.5
 ZOOM_THRESHOLD   = 300   # pinch distance change to trigger zoom step
 ZOOM_COOLDOWN    = 0.25
 
+# 3-finger right-edge vertical → column resize tuning
+EDGE_X_MIN            = 260    # rightmost 50% of trackpad (midpoint of -7456..7976)
+EDGE_RESIZE_THRESHOLD = 400
+EDGE_RESIZE_COOLDOWN  = 0.2
+
 NAUTILUS_CLASSES = {'org.gnome.nautilus', 'nautilus'}
 
-_scroll_accum = 0.0
-_scroll_last  = 0.0
-_tab_accum_x  = 0.0
-_tab_accum_y  = 0.0
-_tab_last     = 0.0
-_pinch_accum  = 0.0
-_pinch_last   = 0.0
-_prev_dist    = None
-_nav_accum    = 0.0
-_nav_last     = 0.0
-_zoom_accum   = 0.0
-_zoom_last    = 0.0
-_zoom_dist    = None
+_scroll_accum      = 0.0
+_scroll_last       = 0.0
+_tab_accum_x       = 0.0
+_tab_accum_y       = 0.0
+_tab_last          = 0.0
+_pinch_accum       = 0.0
+_pinch_last        = 0.0
+_prev_dist         = None
+_nav_accum         = 0.0
+_nav_last          = 0.0
+_zoom_accum        = 0.0
+_zoom_last         = 0.0
+_zoom_dist         = None
+_edge_resize_accum = 0.0
+_edge_resize_last  = 0.0
 
 
 def get_layout():
@@ -107,6 +115,17 @@ def fire_zoom(expand):
     subprocess.Popen(['hyprctl', 'dispatch', 'sendshortcut', f'CTRL, {action}, activewindow'])
 
 
+def fire_edge_resize(expand):
+    global _edge_resize_accum, _edge_resize_last
+    now = time.monotonic()
+    if now - _edge_resize_last < EDGE_RESIZE_COOLDOWN:
+        return
+    _edge_resize_last = now
+    _edge_resize_accum = 0.0
+    cmd = 'colresize +0.05' if expand else 'colresize -0.05'
+    subprocess.Popen(['hyprctl', 'dispatch', 'layoutmsg', cmd])
+
+
 def fire_tab(action):
     global _tab_accum_x, _tab_accum_y, _tab_last
     now = time.monotonic()
@@ -136,7 +155,8 @@ def fire_pinch(expand):
 
 
 def watch():
-    global _scroll_accum, _tab_accum_x, _tab_accum_y, _pinch_accum, _prev_dist, _nav_accum, _zoom_accum, _zoom_dist
+    global _scroll_accum, _tab_accum_x, _tab_accum_y, _pinch_accum, _prev_dist
+    global _nav_accum, _zoom_accum, _zoom_dist, _edge_resize_accum
     try:
         pad = evdev.InputDevice(TRACKPAD_DEV)
     except Exception as ex:
@@ -211,30 +231,47 @@ def watch():
                 x_deltas = list(slot_x_delta.values())
                 y_deltas = list(slot_y_delta.values())
 
-                # Require all 3 slots to be actively moving to ignore palm+2-finger false positives.
-                # A resting palm has near-zero delta per event; real fingers have much more.
-                MIN_SLOT_DELTA = 40
-                active = sum(1 for k in slots
-                             if abs(slot_x_delta.get(k, 0)) + abs(slot_y_delta.get(k, 0)) >= MIN_SLOT_DELTA)
-                if active < 3:
+                in_edge_zone = all(s['x'] is not None and s['x'] >= EDGE_X_MIN
+                                   for s in slots.values())
+
+                if in_edge_zone:
+                    # 3-finger vertical in right-edge zone → column resize
+                    if y_deltas:
+                        avg_y = sum(y_deltas) / len(y_deltas)
+                        if abs(avg_y) >= 8:
+                            _edge_resize_accum += avg_y
+                        else:
+                            _edge_resize_accum = 0.0
+                        if abs(_edge_resize_accum) >= EDGE_RESIZE_THRESHOLD:
+                            fire_edge_resize(_edge_resize_accum < 0)  # up = expand
                     _tab_accum_x = 0.0
                     _tab_accum_y = 0.0
-                elif x_deltas or y_deltas:
-                    avg_x = sum(x_deltas) / len(x_deltas) if x_deltas else 0
-                    avg_y = sum(y_deltas) / len(y_deltas) if y_deltas else 0
-
-                    if abs(avg_x) >= abs(avg_y):
-                        # 3-finger horizontal → browser tab next/prev
-                        _tab_accum_x += avg_x
-                        if abs(_tab_accum_x) >= TAB_THRESHOLD:
-                            fire_tab('prev' if _tab_accum_x > 0 else 'next')
-                        _tab_accum_y = 0.0
-                    else:
-                        # 3-finger vertical → browser tab close/new
-                        _tab_accum_y += avg_y
-                        if abs(_tab_accum_y) >= TAB_THRESHOLD:
-                            fire_tab('new' if _tab_accum_y > 0 else 'close')
+                else:
+                    # Require all 3 slots to be actively moving to ignore palm+2-finger false positives.
+                    # A resting palm has near-zero delta per event; real fingers have much more.
+                    MIN_SLOT_DELTA = 40
+                    active = sum(1 for k in slots
+                                 if abs(slot_x_delta.get(k, 0)) + abs(slot_y_delta.get(k, 0)) >= MIN_SLOT_DELTA)
+                    if active < 3:
                         _tab_accum_x = 0.0
+                        _tab_accum_y = 0.0
+                    elif x_deltas or y_deltas:
+                        avg_x = sum(x_deltas) / len(x_deltas) if x_deltas else 0
+                        avg_y = sum(y_deltas) / len(y_deltas) if y_deltas else 0
+
+                        if abs(avg_x) >= abs(avg_y):
+                            # 3-finger horizontal → browser tab next/prev
+                            _tab_accum_x += avg_x
+                            if abs(_tab_accum_x) >= TAB_THRESHOLD:
+                                fire_tab('prev' if _tab_accum_x > 0 else 'next')
+                            _tab_accum_y = 0.0
+                        else:
+                            # 3-finger vertical → browser tab close/new
+                            _tab_accum_y += avg_y
+                            if abs(_tab_accum_y) >= TAB_THRESHOLD:
+                                fire_tab('new' if _tab_accum_y > 0 else 'close')
+                            _tab_accum_x = 0.0
+                    _edge_resize_accum = 0.0
 
             elif n == 5:
                 # 5-finger pinch → column resize
@@ -267,14 +304,15 @@ def watch():
                     _scroll_accum -= SCROLL_THRESHOLD if _scroll_accum > 0 else -SCROLL_THRESHOLD
 
             else:
-                _scroll_accum = 0.0
-                _tab_accum_x  = 0.0
-                _tab_accum_y  = 0.0
-                _pinch_accum  = 0.0
-                _prev_dist    = None
-                _nav_accum    = 0.0
-                _zoom_accum   = 0.0
-                _zoom_dist    = None
+                _scroll_accum      = 0.0
+                _tab_accum_x       = 0.0
+                _tab_accum_y       = 0.0
+                _pinch_accum       = 0.0
+                _prev_dist         = None
+                _nav_accum         = 0.0
+                _zoom_accum        = 0.0
+                _zoom_dist         = None
+                _edge_resize_accum = 0.0
 
             slot_x_delta.clear()
             slot_y_delta.clear()
