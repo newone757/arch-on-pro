@@ -42,7 +42,8 @@ config/
 │   ├── monitors.conf       # Display scale (2x) and VRR — tuned for 16" retina
 │   └── scripts/            # Gesture scripts for scrolling layout navigation
 ├── systemd/user/
-│   └── auto-brightness.service  # Systemd user service for ALS auto-brightness
+│   ├── auto-brightness.service          # Systemd user service for ALS auto-brightness
+│   └── super-scroll-dispatch.service    # Systemd user service for the gesture daemon
 ├── omarchy/
 │   ├── hooks/theme-set     # Syncs theme files and reloads Hyprland after theme change
 │   └── branding/about.txt  # Custom ASCII logo for fastfetch
@@ -75,9 +76,17 @@ docs/
 
 **disable_while_typing** — `input.conf` enables Hyprland's built-in trackpad suppression while keys are held. Pairs with titdb for belt-and-suspenders coverage.
 
-**3-finger gestures** — up/down resizes columns in scrolling layout (`colresize ±2conf`). Left/right is unbound (previously cycled focus; freed up to avoid conflicts with browser swipe-back/forward).
+**Gesture daemon (super-scroll-dispatch)** — a Python evdev daemon that reads raw multitouch events and dispatches Hyprland actions for gestures Hyprland can't handle natively. Runs as a systemd user service (`systemctl --user enable --now super-scroll-dispatch`). The trackpad device is hardcoded to `/dev/input/event4` in the script — if gestures stop working after a reboot, check `libinput list-devices` and update `TRACKPAD_DEV` if the path changed.
 
-**4-finger gestures** — left/right navigates to the next/previous column in scrolling layout. Up/down switches workspaces. Wrapping at workspace ends is disabled.
+Gestures handled by the daemon:
+- **2-finger horizontal (Nautilus)** → back/forward (`Alt+Left/Right`)
+- **2-finger pinch (Nautilus)** → zoom (`Ctrl+=/−`)
+- **3-finger horizontal** → browser tab next/prev (`Ctrl+Tab` / `Ctrl+Shift+Tab`)
+- **3-finger vertical** → browser tab close/new (`Ctrl+W` / `Ctrl+T`)
+- **4-finger horizontal** → navigate columns in scrolling layout (or `cyclenext` otherwise)
+- **5-finger pinch** → resize current column (`colresize ±0.1`)
+
+4-finger vertical workspace switching is handled natively by Hyprland via `gesture = 4, vertical, workspace` in `input.conf`.
 
 **Workspace animations** — `looknfeel.conf` replaces the disabled workspace animation with `slidevert` (vertical slide, speed 8) so workspace switching has visible direction. Matches the 4-finger up/down gesture.
 
