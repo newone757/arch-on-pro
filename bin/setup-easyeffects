@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Installs EasyEffects + audio plugins and deploys presets with MBP 16 M1 as default.
+set -e
+
+DOTFILES="$(cd "$(dirname "$0")/.." && pwd)"
+
+echo "Installing EasyEffects and audio plugins..."
+sudo pacman -S --needed --noconfirm easyeffects calf mda.lv2
+
+echo "Deploying presets..."
+mkdir -p ~/.local/share/easyeffects/output
+for preset in "MBP 16 M1" "Perfect EQ" "Laptop"; do
+    cp "$DOTFILES/local/share/easyeffects/output/$preset.json" \
+       "$HOME/.local/share/easyeffects/output/$preset.json"
+done
+
+echo "Setting MBP 16 M1 as default output preset..."
+mkdir -p ~/.config/easyeffects/db
+python3 - <<'EOF'
+import configparser, os
+path = os.path.expanduser('~/.config/easyeffects/db/easyeffectsrc')
+cfg = configparser.RawConfigParser()
+cfg.read(path)
+if not cfg.has_section('Presets'):
+    cfg.add_section('Presets')
+cfg.set('Presets', 'lastLoadedOutputPreset', 'MBP 16 M1')
+with open(path, 'w') as f:
+    cfg.write(f)
+EOF
+
+echo "Done. Launch EasyEffects — MBP 16 M1 will be the active preset."

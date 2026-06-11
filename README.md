@@ -14,6 +14,7 @@ bin/
 ├── setup-auto-brightness   # Installs auto-brightness + systemd service
 ├── setup-asahi-audio-tune  # Applies custom speaker tuning + pacman hook
 ├── setup-brave             # Automates fresh Brave install setup
+├── setup-easyeffects       # Installs EasyEffects + plugins and deploys preset
 ├── setup-titdb             # Installs TITDB palm/edge rejection daemon
 └── omarchy-icons-apply-color  # Recolors OmarchyIcons folder SVGs
 
@@ -52,6 +53,11 @@ config/
 ├── waypaper/
 │   └── config.ini          # Wallpaper picker config (backend: swaybg, folder: ~/Wallpapers)
 └── waybar/                 # Status bar layout and styles
+
+local/share/easyeffects/output/
+├── MBP 16 M1.json          # Custom preset for MacBook Pro 16" M1 (default)
+├── Perfect EQ.json         # Community Perfect EQ preset
+└── Laptop.json             # Community Laptop preset
 
 local/share/applications/
 ├── Lightroom CC.desktop    # Webapp shortcut (shows in Walker launcher)
@@ -127,6 +133,14 @@ Symlink or copy what you need into `~/.config/`. Copy `local/` into `~/.local/`.
 chmod +x config/hypr/scripts/*
 chmod +x config/omarchy/hooks/theme-set
 ```
+
+**EasyEffects** (PipeWire system-wide EQ and dynamics for MacBook speakers):
+
+```bash
+./bin/setup-easyeffects
+```
+
+Installs `easyeffects`, `calf` (bass enhancer, exciter), and `mda.lv2` (bass loudness), then deploys the `MBP 16 M1` preset to `~/.local/share/easyeffects/output/`. Open EasyEffects, click the star icon, and load **MBP 16 M1**. The preset runs a 7-stage chain: Gate → Compressor → Multiband Compressor → Bass Loudness → Bass Enhancer → Equalizer (10-band, tuned for the 16" speakers) → Limiter. EasyEffects is set to autostart on login.
 
 **Speaker tuning** (reduced bass enhancement for less muddy sound):
 
