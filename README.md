@@ -152,6 +152,29 @@ Installs `iio-sensor-proxy`, drops the script into `~/.local/bin/`, and enables 
 
 Installs `titdb-git` from AUR, sets up the `uinput` group and udev rule, loads the `uinput` kernel module at boot, and enables the `titdb` systemd service. Runs in flex mode with left/right edges dead-zoned 10% and bottom 15%. To tune: edit `/etc/systemd/system/titdb.service.d/override.conf` and run `sudo systemctl restart titdb`.
 
+**Windows 11 ARM VM** (dockurr/windows via Docker, connects over RDP):
+
+```bash
+omarchy-windows-vm install
+```
+
+Installs `freerdp` and `openbsd-netcat`, writes `~/.config/windows/docker-compose.yml`, and starts the unattended Windows 11 ARM install (20–40 min, monitor at `http://127.0.0.1:8006`). Once done, launch via Walker (Super+Space → "Windows"). The launcher uses `omarchy-launch-or-focus` so a second Walker invocation focuses the existing RDP window rather than opening a duplicate.
+
+The compose file in this repo has credentials and timezone redacted — fill in `USERNAME`, `PASSWORD`, and `TZ` before first use, or just run `omarchy-windows-vm install` and let the interactive prompts handle it. Either way, copy the result to `~/.config/windows/docker-compose.yml`.
+
+Two post-install patches applied on top of the Omarchy fork defaults:
+- `restart: "no"` — prevents the container from autostarting at boot (Docker daemon is enabled; without this Windows would start on every reboot)
+- Ports bound to `127.0.0.1` — the script already does this, noted here for clarity since default Docker behavior would expose them on all interfaces
+
+The Windows icon is copied from the Omarchy fork during `omarchy-windows-vm install` — no need to track it separately here. Storage lives in `~/.windows/` (VM disk) and `~/Windows/` (shared folder with host).
+
+To remove everything:
+
+```bash
+omarchy-windows-vm remove
+rm -rf ~/.windows ~/Windows
+```
+
 ---
 
 ## Custom themes
