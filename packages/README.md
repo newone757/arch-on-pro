@@ -13,23 +13,40 @@ You'll be on a **different base** (mac fork, Omarchy 4.0). Reinstalling the full
 drag in things 4.0 provides itself, things it **removed**, and things that are just deps.
 Restore *selectively*.
 
-### Skip — provided by Omarchy/the fork, or removed in 4.0
-- **Removed in 4.0 (do not reinstall):** `walker`, `elephant*` (old launcher stack) — 4.0's
-  launcher is Quickshell. Also gone at the system level: mako, swaybg, hyprlock/hypridle, swayosd.
-- **Comes with Omarchy/fork:** `omarchy-chromium-bin`, `omarchy-nvim`, `aether`,
-  `xdg-terminal-exec`, `hyprshade`, `wayfreeze-git`, `hyprland-preview-share-picker-git`, `yay`.
-- **Pulled as dependencies:** the `python-*`, `*-targeting-pack`, `aspnet-*` entries.
+The "you added" lists below were derived by diffing installed packages against
+Omarchy's own default manifests (`~/.local/share/omarchy/install/*.packages`).
+⚠️ Caveat: packages Omarchy installs via **scripts** (not `.packages`) look like
+user additions but aren't — confirmed preinstalled: **`zen-browser-twilight-bin`,
+`ghostty-git` (+integration/terminfo), `walker`** (see `install/arm_install_scripts/`).
 
-### Reinstall — your actual apps (the ones worth not forgetting)
-- **Browsers:** `brave-bin`, `zen-browser-twilight-bin` (+ re-run `bin/setup-brave`, `bin/setup-zen`)
-- **Terminal:** `ghostty-git` (+ `ghostty-shell-integration-git`, `ghostty-terminfo-git`)
-- **Editors/notes:** `typora`, `obsidian`, `ttf-ia-writer`
-- **Media/graphics:** `obs-studio-git`, `pinta-git`, `miniaturo-git`
-- **Files/sharing:** `localsend-bin`, `dropbox` (native .desktop was present)
-- **Dev:** `claude-code`, `opencode`, `bun-prebuilt`, `mise`, the `dotnet-sdk/runtime-10.0-bin` stack, `pandoc-bin`
-- **Input/hardware (also have setup scripts in `../bin/`):** `titdb-git`, `input-remapper-git`,
-  `waypaper`, `papirus-folders`, `blueberry`, `gnome-bluetooth`, `tzupdate`, `ufw-docker`
-- **Fonts/icons:** `ttf-ia-writer`, `yaru-icon-theme`
+### Skip — Omarchy defaults / base / removed in 4.0 (do NOT reinstall)
+- **Preinstalled by Omarchy (AUR):** `zen-browser-twilight-bin`, `ghostty-git`+integration+terminfo,
+  `walker`, `typora`, `obs-studio-git`, `localsend-bin`, `mise`, `opencode`, `claude-code`,
+  `pinta-git`, `aether`, `elephant*`, `blueberry`, `hyprshade`, `ttf-ia-writer`, `yaru-icon-theme`,
+  `wayfreeze-git`, `xdg-terminal-exec`, `tzupdate`, `ufw-docker`, `omarchy-chromium-bin`,
+  `omarchy-nvim`, `yay`, `hyprland-preview-share-picker-git`.
+- **Removed in 4.0:** `walker`/`elephant*` (Quickshell launcher now); also mako, swaybg,
+  hyprlock/hypridle, swayosd at the system level.
+- **Asahi/Arch base + deps (fork installs these):** `linux-asahi`, `m1n1`, `uboot-asahi`,
+  `asahi-*`, `*-keyring`, `grub`, `greetd`, `networkmanager`, `openssh`, `sudo`, `neovim`,
+  `nodejs`/`npm`, `cmake`, and lib deps (`asio`, `mbedtls`, `simde`, `python-imageio-ffmpeg`,
+  `electron41-bin`, `*-targeting-pack`, etc).
+
+### Reinstall — YOUR additions (confirmed via diff)
+- **Browser:** `brave-bin` (+ re-run `bin/setup-brave`)  *(zen is preinstalled — skip)*
+- **Photo/media:** `darktable` *(maybe drop — you stopped using it)*, `vlc`
+- **Dev:** `dotnet-sdk/runtime/host/targeting-pack-10.0-bin`, `aspnet-runtime/targeting-pack-10.0-bin`,
+  `bun-prebuilt`, `pandoc-bin`
+- **Networking/util:** `tailscale`, `duf`, `powertop`, `xclip`
+- **Input/hardware/theming (tied to `../bin/setup-*`):** `titdb-git`, `input-remapper-git`,
+  `waypaper`, `papirus-folders`, `papirus-icon-theme`, `gnome-bluetooth`, `iio-sensor-proxy`
+- **Misc:** `miniaturo-git`
+
+### Already captured elsewhere (don't need manual reinstall reasoning)
+- **EasyEffects speaker EQ:** `easyeffects` + `calf` + `mda.lv2` + `rnnoise` → `bin/setup-easyeffects` + presets
+- **Spotify:** webapp, not a package → `../local/share/applications/Spotify.desktop`
+- **Windows VM:** `freerdp` + `openbsd-netcat` + Docker image `dockurr/windows` → `config/windows/` + README
+- **Widevine DRM:** `widevine` → part of `bin/setup-brave`
 
 ### Webapps
 Only the webapps **you added** are tracked (Discord, GitHub, Spotify, YouTube, Lightroom CC)
