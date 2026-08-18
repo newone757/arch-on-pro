@@ -54,6 +54,10 @@ window#waybar {
   margin: 0 7.5px;
 }
 
+#custom-omarchy {
+  color: @logo_color;
+}
+
 #tray {
   margin-right: 16px;
 }
