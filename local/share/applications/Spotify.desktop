@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Name=Spotify
+Comment=Spotify
+Exec=omarchy-launch-webapp https://open.spotify.com
+Terminal=false
+Type=Application
+Icon=/home/lonnie/.local/share/applications/icons/Spotify.png
+StartupNotify=true

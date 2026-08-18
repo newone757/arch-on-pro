@@ -123,10 +123,22 @@ as Quickshell QML / 4.0 config.
 
 ## Suggested sequence
 
+This is a direct wipe-and-reinstall of the 16" daily driver — there is no comparable
+test machine (the M1 Air has no notch and different speakers/sensors, so it validates
+none of the hardware-specific work). So the strategy is: do everything that *can* be
+prepared on the current 3.5.1 system first, minimize the blind reinstall window, and
+validate the two unknowns before committing.
+
 1. **Snapshot is current** — repo pushed, drift committed. ✅
-2. **Tag the survivors** — Tiers A/B are your "reapply kit"; they're ~70% of the repo by
-   count and nearly all the hard hardware work.
-3. **Dry-run on the M1 Air** (armarchy) first if available — same fork, no risk to the 16".
-4. **Prototype the Quickshell bar** (Tier C) on the Air before touching the 16".
-5. **Rework one theme** end-to-end to the 24-color format as a template for the rest.
-6. **Fresh-install the 16"** only once the reapply kit + bar + one theme are proven.
+2. **Prototype the Quickshell bar on the current 3.5.1 machine.** Quickshell is just a
+   package — install it and build/test the bar QML (Tier C) *alongside* the running
+   Waybar (spare workspace/monitor) so the shell rebuild is ready before the wipe, not after.
+3. **Rework one theme** end-to-end to the 24-color format as a template for the rest.
+4. **De-risk the 16" unknowns before wiping** (can't be tested any other way):
+   - Check Asahi's feature-support matrix for the 16" M1 (`j316`) — speakers, notch,
+     suspend, external display, brightness.
+   - Search the `omarchy-mx-mac` issues/discussions for any 16" reports.
+   - Back up everything not in this repo (EasyEffects runtime db, wallpapers, ~/Projects, VM disks).
+5. **Fresh-install the 16"** once the reapply kit + bar + one theme are proven and the
+   hardware matrix looks acceptable.
+6. **Reapply Tier A/B** from the repo, then finish porting remaining themes.
