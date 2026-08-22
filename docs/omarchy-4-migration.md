@@ -115,9 +115,32 @@ background source, autostart mechanism).
       `o.launch_on_start("easyeffects --service-mode")` (the current flag; the
       old `--gapplication-service` is deprecated). Runs the MBP 16 M1 preset's
       filter chain headless, no window, on Hyprland start.
-- [ ] 🟡 **Icon theming** — `bin/omarchy-icons-apply-color` + OmarchyIcons fork.
-      Depends on the `theme-set` hook still firing (Tier C) and reads the accent from the
-      palette — verify against the new 24-color `colors.toml` format.
+- [x] ✅ **Icon theming** — done 2026-08-22. This turned out to be a real active
+      bug, not just an unverified item: switching to any of the 8 custom themes
+      (all done in the previous session) sets `gsettings ... icon-theme
+      'OmarchyIcons'` — 4.0's `omarchy-theme-set` writes that from the theme's
+      `icons.theme` file natively — but nothing actually *generated* the
+      OmarchyIcons folder, since that was the old 3.5.1 `theme-set` hook's job
+      and the hook was never installed on this machine at all (confirmed:
+      `~/.config/omarchy/hooks/theme-set` didn't exist). Every theme switch was
+      silently pointing icon resolution at a folder that didn't exist on disk —
+      this is what broke the auto-brightness notification icon a second time,
+      unrelated to the first (icon-name) fix.
+      Rewrote `config/omarchy/hooks/theme-set` from scratch — scoped to just
+      icon coloring, not a resurrection of the old monolithic hook (which also
+      did Waybar CSS sync, `theme-border.conf` generation, Zen Browser
+      theming, and Brave color-policy darkening — all left alone; Waybar/
+      theme-border.conf are dead code for 4.0, Zen/Brave weren't asked for).
+      Uses the 4.0 paths (`~/.local/state/omarchy/current/theme/`, `$OMARCHY_PATH/themes`)
+      and reads the new `colors.toml` key names (`accent`/`magenta`/`blue`/
+      `foreground`, not the old `color4`/`color5`) as its derive-a-color
+      fallback chain. `bin/omarchy-icons-apply-color` itself needed no changes
+      — it was just never installed to `~/.local/bin` (no dedicated setup
+      script for it, unlike `auto-brightness`); documented in README.md.
+      Verified live: confirmed the hook correctly regenerates OmarchyIcons for
+      a custom theme (armarchy-hinterlands) and correctly *skips* regeneration
+      for a stock theme with its own real icon theme (Velora → Yaru-sage) —
+      doesn't clobber a theme's deliberate icon choice.
 - [ ] 🟡 **omarchy-theme-server** (Spotify web theming, port 7842) — `bin/omarchy-theme-server`
       + systemd service. Independent HTTP server, but reads the active palette → update
       for 24-color format.

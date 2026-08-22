@@ -134,6 +134,15 @@ chmod +x config/hypr/scripts/*
 chmod +x config/omarchy/hooks/theme-set
 ```
 
+`bin/omarchy-icons-apply-color` needs to be on `PATH` — the `theme-set` hook
+calls it by bare name. Copy it to `~/.local/bin/`:
+
+```bash
+mkdir -p ~/.local/bin
+cp bin/omarchy-icons-apply-color ~/.local/bin/
+chmod +x ~/.local/bin/omarchy-icons-apply-color
+```
+
 **EasyEffects** (PipeWire system-wide EQ and dynamics for MacBook speakers):
 
 ```bash
