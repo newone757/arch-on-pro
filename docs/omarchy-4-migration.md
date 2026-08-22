@@ -48,15 +48,69 @@ Hardware / kernel / systemd / PipeWire level — untouched by the Quickshell rew
 Works at its own layer, but touches something that changed (palette, launcher name,
 background source, autostart mechanism).
 
-- [ ] 🟡 **Hyprland configs** — `hyprland.conf`, `bindings.conf`, `input.conf`,
-      `looknfeel.conf`, `monitors.conf`. Hyprland is still the compositor, BUT:
-  - Re-verify the `source =` / include order against 4.0's default hypr layout.
-  - `looknfeel.conf` carries Hyprland 0.55.x fixes (dropped `col.border_locked_*`,
-    `dwindle{pseudotile}`) — re-check against the Hyprland version 4.0 ships.
-  - `monitors.conf` 2x scale + VRR — should port unchanged.
-  - Several bindings reference removed tools — see Tier C.
-- [ ] 🟡 **input.conf gestures** — 4-finger native workspace, `scroll_touchpad 0.4`,
-      `disable_while_typing`. Port; confirm gesture syntax unchanged in new Hyprland.
+- [x] ✅ **Hyprland configs** — done 2026-08-22, ported (not copied) into
+      `config/hypr/*.lua`, sitting alongside the old `.conf` files kept as reference.
+      4.0 rewrote this whole layer: Hyprland 0.56.1 now has **native Lua config**
+      (an `hl`/`o` API, `~/.config/hypr/*.lua`), a completely different mechanism
+      from the old `source =`-chained `.conf` files. The fork's own
+      `/usr/share/omarchy/default/hypr/*.lua` was diffed line-by-line against each
+      old `.conf` to find genuine deltas — most of the old files turned out to
+      already be covered by current defaults (see per-file notes below) or
+      superseded entirely by better native 4.0 mechanisms:
+  - `monitors.lua`: ported 2x scale (unchanged) + VRR. VRR needed a global
+    `misc.vrr = 1` in addition to the per-monitor flag (the per-monitor flag
+    alone did nothing on this Hyprland version) — `hyprctl monitors` still
+    reports `vrr: false` though; that's Asahi's `apple-dcp` driver not yet
+    exposing real adaptive sync (fixed discrete refresh-rate list, not a
+    continuous range), not a config problem.
+  - `input.lua`: ported natural_scroll + scroll_factor (0.1, vs 4.0's default
+    0.4) and the Nautilus/waypaper/Aether touchpad scroll overrides
+    (Alacritty/kitty/ghostty are already 4.0 defaults). kb_options/repeat
+    rate/numlock were already matching defaults, no override needed. Ported
+    the 4-finger vertical workspace-switch gesture (`hl.gesture`).
+  - `looknfeel.lua`: the old file's header said it fully *replaced* the
+    default because of a Hyprland 0.55.x bug (`col.border_locked_*` rejecting
+    `-1`, `dwindle:pseudotile` removed) — almost everything in it turns out to
+    already be 4.0's own default now (bezier curves, dwindle, master, misc,
+    cursor, binds all match exactly). The only genuine deltas: `gaps_out = 6`
+    (default 10), `layout = "scrolling"` (default `dwindle` — the user
+    actually runs the niri-like scrolling layout), the `scrolling{}` block's
+    tuning, `group.col.border_locked_*` pinned explicitly via
+    `hl.get_config()` reading back the live theme's border color (belt-and-
+    suspenders past the original 0.55.x bug), and the `GUM_CONFIRM_*` env vars.
+  - `hyprland.lua`: only the `XCURSOR_SIZE`/`HYPRCURSOR_SIZE=20` override
+    survives (default is 24) — everything else is now handled by the fork's
+    own `require()` chain. The Parallels-clipboard windowrule was dropped
+    (Parallels is macOS-only, N/A on this Asahi Linux install). The
+    `theme-border.conf` Aether-overwrites-border-color workaround was **not**
+    ported — it targeted `~/.config/omarchy/current/theme/hyprland.conf`,
+    a path/mechanism 4.0 replaced with `~/.local/state/omarchy/current/theme/
+    hyprland.lua` loaded through the fork's own official theme pipeline, not
+    something a viewer app should be touching anymore. Revisit only if that
+    specific bug resurfaces.
+  - `bindings.lua`: most of the old file is superseded by better 4.0 native
+    defaults — bar toggle already lives on SUPER+SHIFT+SPACE (no need to
+    reclaim SUPER+W from close-window anymore), screenshot is a much richer
+    native capture menu (PRINT/capture-menu bindings), the old
+    sendshortcut-activewindow bug for universal copy/paste/cut is fixed
+    upstream. Genuinely ported: Typora (SHIFT+W, default now points at the
+    new Omawrite app), Claude (SHIFT+A, default now points at ChatGPT),
+    Reddit + Lightroom CC (SHIFT+R/L, free keys, not in defaults), the
+    scroll-to-focus-column mouse binding (default scrolls workspaces instead,
+    wrong gesture for the scrolling layout), and the custom `super-j` script
+    (default SUPER+J always calls dwindle's `togglesplit`, which is a no-op
+    in the scrolling layout — the script picks the right dispatcher per the
+    active workspace's actual layout).
+  - **Found and fixed a real bug along the way, not just a port**: 4.0's own
+    default lid-switch bindings target a device literally named `"Lid
+    Switch"`, but `hyprctl devices` shows this machine's actual switch is
+    named `"Apple SMC power/lid events"` (exactly what the old 3.5.1 config
+    already knew) — the stock 4.0 default silently never fires on this Mac.
+    Rebound the correct device name to 4.0's own native handlers
+    (`omarchy-system-lid-close` / `omarchy-hyprland-monitor-clamshell`),
+    which are smarter than the old config's blunt lock+suspend (they
+    correctly skip locking when docked in clamshell mode with an external
+    display).
 - [ ] 🟡 **EasyEffects autostart** — was login-autostart; re-add via 4.0's autostart mechanism.
 - [ ] 🟡 **Icon theming** — `bin/omarchy-icons-apply-color` + OmarchyIcons fork.
       Depends on the `theme-set` hook still firing (Tier C) and reads the accent from the
@@ -70,10 +124,13 @@ background source, autostart mechanism).
 - [ ] 🟡 **Windows 11 ARM VM** — `config/windows/docker-compose.yml`, `windows-vm.desktop`.
       Docker-level so it runs, but the launcher used `omarchy-launch-or-focus` + Walker;
       rewire to the new launcher. Depends on `omarchy-windows-vm` helper existing (❓ Tier D).
-- [ ] 🟡 **Waypaper wallpaper picker** — `config/waypaper/config.ini`. Backend is set to
-      **`swaybg`, which 4.0 removed** → switch backend (or hand wallpaper to Quickshell).
-      `post_command` updates the `current/background` symlink that **hyprlock** read — the
-      lock screen is now Quickshell, so re-point this at whatever the new lock screen reads.
+- [x] ✅ **Waypaper wallpaper picker** — done in Phase B, 2026-08-22 (see
+      `config/waypaper/config.ini` and commit `8ecd769`). `backend = none`
+      (Quickshell paints the background itself, no swaybg/swww/hyprpaper
+      needed) and `post_command = omarchy-theme-bg-set "$wallpaper"`, which
+      updates `~/.local/state/omarchy/current/background` (moved from
+      `~/.config/omarchy/current/background`) and both Quickshell's
+      background plugin and its lock screen read the new path.
 
 ---
 
