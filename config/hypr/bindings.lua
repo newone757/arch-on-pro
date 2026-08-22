@@ -64,14 +64,6 @@ o.bind("SUPER + SHIFT + A", "Claude", { webapp = "https://claude.ai" })
 o.bind("SUPER + SHIFT + R", "Reddit", { webapp = "https://reddit.com" })
 o.bind("SUPER + SHIFT + L", "Lightroom CC", { webapp = "https://lightroom.adobe.com/home", focus = true })
 
--- Super + two-finger scroll moves focus between columns instead of the
--- default's switch-workspace — the natural gesture for the niri-like
--- scrolling layout set in looknfeel.lua.
-hl.unbind("SUPER + mouse_down")
-hl.unbind("SUPER + mouse_up")
-o.bind("SUPER + mouse_down", "Focus next column", hl.dsp.focus({ direction = "r" }))
-o.bind("SUPER + mouse_up", "Focus previous column", hl.dsp.focus({ direction = "l" }))
-
 -- Layout-aware split/consume: default SUPER+J always calls togglesplit,
 -- which is a dwindle-only concept and does nothing useful in the scrolling
 -- layout this config uses. The script picks the right dispatcher for

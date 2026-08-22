@@ -3,94 +3,54 @@
 Trackpad gesture daemon:
   - 2-finger horizontal swipe (Nautilus) → back/forward (Alt+Left/Right)
   - 2-finger pinch (Nautilus)            → zoom (Ctrl+=/-)
-  - 3-finger vertical swipe (right edge) → resize current column (colresize ±0.05)
   - 3-finger horizontal swipe            → browser tab next/prev (Ctrl+Tab / Ctrl+Shift+Tab)
   - 3-finger vertical swipe              → browser tab close/new (Ctrl+W / Ctrl+T)
-  - 4-finger horizontal scroll           → navigate columns (scrolling layout) or cyclenext
-  - 5-finger pinch                       → resize current column (colresize ±0.1)
+
+Column-resize gestures (3-finger right-edge, 5-finger pinch) and 4-finger
+column navigation were removed along with the scrolling layout experiment —
+4-finger horizontal is now a native Hyprland gesture (see input.lua) instead
+of being handled here, so this daemon no longer needs to see 4+ finger
+touches at all.
 """
 
-import json
 import math
 import subprocess
-import time
 import sys
 import evdev
 from evdev import ecodes as e
 
-TRACKPAD_DEV     = '/dev/input/by-path/platform-39b10c000.spi-cs-0-event-mouse'
-
-# 4-finger column nav tuning
-SCROLL_THRESHOLD = 450
-SCROLL_COOLDOWN  = 0.2
+TRACKPAD_DEV = '/dev/input/by-path/platform-39b10c000.spi-cs-0-event-mouse'
 
 # 3-finger browser tab tuning
-TAB_THRESHOLD    = 300
-TAB_COOLDOWN     = 0.4
-
-# 5-finger pinch → column resize tuning
-PINCH_THRESHOLD  = 300
-PINCH_COOLDOWN   = 0.3
+TAB_THRESHOLD = 300
+TAB_COOLDOWN = 0.4
 
 # 2-finger Nautilus tuning
-NAV_THRESHOLD    = 400   # horizontal swipe to trigger back/forward
-NAV_COOLDOWN     = 0.5
-ZOOM_THRESHOLD   = 300   # pinch distance change to trigger zoom step
-ZOOM_COOLDOWN    = 0.25
-
-# 3-finger right-edge vertical → column resize tuning
-EDGE_X_MIN            = 260    # rightmost 50% of trackpad (midpoint of -7456..7976)
-EDGE_RESIZE_THRESHOLD = 400
-EDGE_RESIZE_COOLDOWN  = 0.2
+NAV_THRESHOLD = 400   # horizontal swipe to trigger back/forward
+NAV_COOLDOWN = 0.5
+ZOOM_THRESHOLD = 300  # pinch distance change to trigger zoom step
+ZOOM_COOLDOWN = 0.25
 
 NAUTILUS_CLASSES = {'org.gnome.nautilus', 'nautilus'}
 
-_scroll_accum      = 0.0
-_scroll_last       = 0.0
-_tab_accum_x       = 0.0
-_tab_accum_y       = 0.0
-_tab_last          = 0.0
-_pinch_accum       = 0.0
-_pinch_last        = 0.0
-_prev_dist         = None
-_nav_accum         = 0.0
-_nav_last          = 0.0
-_zoom_accum        = 0.0
-_zoom_last         = 0.0
-_zoom_dist         = None
-_edge_resize_accum = 0.0
-_edge_resize_last  = 0.0
+import time
+
+_tab_accum_x = 0.0
+_tab_accum_y = 0.0
+_tab_last = 0.0
+_nav_accum = 0.0
+_nav_last = 0.0
+_zoom_accum = 0.0
+_zoom_last = 0.0
+_zoom_dist = None
 
 
-def get_layout():
-    try:
-        r = subprocess.run(['hyprctl', 'activeworkspace', '-j'],
-                           capture_output=True, text=True)
-        return json.loads(r.stdout).get('tiledLayout', '')
-    except Exception:
-        return ''
-
-
-def fire_scroll(direction):
-    global _scroll_last
-    now = time.monotonic()
-    if now - _scroll_last < SCROLL_COOLDOWN:
-        return
-    _scroll_last = now
-    if get_layout() == 'scrolling':
-        subprocess.Popen(['hyprctl', 'dispatch', 'layoutmsg', f'focus {direction}'])
-    else:
-        arg = ['prev'] if direction == 'l' else []
-        subprocess.Popen(['hyprctl', 'dispatch', 'cyclenext'] + arg)
-
-
-def get_active_class():
-    try:
-        r = subprocess.run(['hyprctl', 'activewindow', '-j'],
-                           capture_output=True, text=True)
-        return json.loads(r.stdout).get('class', '').lower()
-    except Exception:
-        return ''
+def send_shortcut(mods, key):
+    # hyprctl dispatch's classic "sendshortcut MODS, KEY, window" string
+    # syntax no longer parses under Hyprland's native Lua config — it must
+    # be a Lua table now.
+    lua = f'hl.dsp.send_shortcut({{mods="{mods}", key="{key}", window="activewindow"}})'
+    subprocess.Popen(['hyprctl', 'dispatch', lua])
 
 
 def fire_nav(direction):
@@ -100,8 +60,7 @@ def fire_nav(direction):
         return
     _nav_last = now
     _nav_accum = 0.0
-    shortcut = 'ALT, Left, activewindow' if direction == 'back' else 'ALT, Right, activewindow'
-    subprocess.Popen(['hyprctl', 'dispatch', 'sendshortcut', shortcut])
+    send_shortcut('ALT', 'Left' if direction == 'back' else 'Right')
 
 
 def fire_zoom(expand):
@@ -111,19 +70,7 @@ def fire_zoom(expand):
         return
     _zoom_last = now
     _zoom_accum = 0.0
-    action = 'equal' if expand else 'minus'
-    subprocess.Popen(['hyprctl', 'dispatch', 'sendshortcut', f'CTRL, {action}, activewindow'])
-
-
-def fire_edge_resize(expand):
-    global _edge_resize_accum, _edge_resize_last
-    now = time.monotonic()
-    if now - _edge_resize_last < EDGE_RESIZE_COOLDOWN:
-        return
-    _edge_resize_last = now
-    _edge_resize_accum = 0.0
-    cmd = 'colresize +0.05' if expand else 'colresize -0.05'
-    subprocess.Popen(['hyprctl', 'dispatch', 'layoutmsg', cmd])
+    send_shortcut('CTRL', 'equal' if expand else 'minus')
 
 
 def fire_tab(action):
@@ -135,36 +82,35 @@ def fire_tab(action):
     _tab_accum_x = 0.0
     _tab_accum_y = 0.0
     shortcuts = {
-        'next':  'CTRL, Tab, activewindow',
-        'prev':  'CTRL SHIFT, Tab, activewindow',
-        'close': 'CTRL, W, activewindow',
-        'new':   'CTRL, T, activewindow',
+        'next': ('CTRL', 'Tab'),
+        'prev': ('CTRL SHIFT', 'Tab'),
+        'close': ('CTRL', 'W'),
+        'new': ('CTRL', 'T'),
     }
-    subprocess.Popen(['hyprctl', 'dispatch', 'sendshortcut', shortcuts[action]])
+    mods, key = shortcuts[action]
+    send_shortcut(mods, key)
 
 
-def fire_pinch(expand):
-    global _pinch_accum, _pinch_last
-    now = time.monotonic()
-    if now - _pinch_last < PINCH_COOLDOWN:
-        return
-    _pinch_last = now
-    _pinch_accum = 0.0
-    cmd = 'colresize +0.1' if expand else 'colresize -0.1'
-    subprocess.Popen(['hyprctl', 'dispatch', 'layoutmsg', cmd])
+def get_active_class():
+    try:
+        r = subprocess.run(['hyprctl', 'activewindow', '-j'],
+                            capture_output=True, text=True)
+        import json
+        return json.loads(r.stdout).get('class', '').lower()
+    except Exception:
+        return ''
 
 
 def watch():
-    global _scroll_accum, _tab_accum_x, _tab_accum_y, _pinch_accum, _prev_dist
-    global _nav_accum, _zoom_accum, _zoom_dist, _edge_resize_accum
+    global _tab_accum_x, _tab_accum_y, _nav_accum, _zoom_accum, _zoom_dist
     try:
         pad = evdev.InputDevice(TRACKPAD_DEV)
     except Exception as ex:
         print(f'pad error: {ex}')
         sys.exit(1)
 
-    slots        = {}
-    cur_slot     = 0
+    slots = {}
+    cur_slot = 0
     slot_x_delta = {}
     slot_y_delta = {}
 
@@ -201,15 +147,15 @@ def watch():
                 if len(x_deltas) == 2 and len(y_deltas) == 2:
                     MIN_PINCH = 6
                     opp_x = (x_deltas[0] * x_deltas[1] < 0 and
-                              all(abs(d) >= MIN_PINCH for d in x_deltas))
+                             all(abs(d) >= MIN_PINCH for d in x_deltas))
                     opp_y = (y_deltas[0] * y_deltas[1] < 0 and
-                              all(abs(d) >= MIN_PINCH for d in y_deltas))
+                             all(abs(d) >= MIN_PINCH for d in y_deltas))
                     if opp_x or opp_y:
                         # Pinch → zoom
                         xs = [s['x'] for s in slots.values() if s['x'] is not None]
                         ys = [s['y'] for s in slots.values() if s['y'] is not None]
                         if len(xs) == 2 and len(ys) == 2:
-                            dist = math.sqrt((xs[1]-xs[0])**2 + (ys[1]-ys[0])**2)
+                            dist = math.sqrt((xs[1] - xs[0]) ** 2 + (ys[1] - ys[0]) ** 2)
                             if _zoom_dist is not None:
                                 _zoom_accum += dist - _zoom_dist
                                 if abs(_zoom_accum) >= ZOOM_THRESHOLD:
@@ -225,94 +171,43 @@ def watch():
                             if abs(_nav_accum) >= NAV_THRESHOLD:
                                 fire_nav('back' if _nav_accum > 0 else 'forward')
                         _zoom_accum = 0.0
-                        _zoom_dist  = None
+                        _zoom_dist = None
 
             elif n == 3:
                 x_deltas = list(slot_x_delta.values())
                 y_deltas = list(slot_y_delta.values())
 
-                in_edge_zone = all(s['x'] is not None and s['x'] >= EDGE_X_MIN
-                                   for s in slots.values())
-
-                if in_edge_zone:
-                    # 3-finger vertical in right-edge zone → column resize
-                    if y_deltas:
-                        avg_y = sum(y_deltas) / len(y_deltas)
-                        if abs(avg_y) >= 8:
-                            _edge_resize_accum += avg_y
-                        else:
-                            _edge_resize_accum = 0.0
-                        if abs(_edge_resize_accum) >= EDGE_RESIZE_THRESHOLD:
-                            fire_edge_resize(_edge_resize_accum < 0)  # up = expand
+                # Require all 3 slots to be actively moving to ignore palm+2-finger false positives.
+                # A resting palm has near-zero delta per event; real fingers have much more.
+                MIN_SLOT_DELTA = 40
+                active = sum(1 for k in slots
+                             if abs(slot_x_delta.get(k, 0)) + abs(slot_y_delta.get(k, 0)) >= MIN_SLOT_DELTA)
+                if active < 3:
                     _tab_accum_x = 0.0
                     _tab_accum_y = 0.0
-                else:
-                    # Require all 3 slots to be actively moving to ignore palm+2-finger false positives.
-                    # A resting palm has near-zero delta per event; real fingers have much more.
-                    MIN_SLOT_DELTA = 40
-                    active = sum(1 for k in slots
-                                 if abs(slot_x_delta.get(k, 0)) + abs(slot_y_delta.get(k, 0)) >= MIN_SLOT_DELTA)
-                    if active < 3:
-                        _tab_accum_x = 0.0
+                elif x_deltas or y_deltas:
+                    avg_x = sum(x_deltas) / len(x_deltas) if x_deltas else 0
+                    avg_y = sum(y_deltas) / len(y_deltas) if y_deltas else 0
+
+                    if abs(avg_x) >= abs(avg_y):
+                        # 3-finger horizontal → browser tab next/prev
+                        _tab_accum_x += avg_x
+                        if abs(_tab_accum_x) >= TAB_THRESHOLD:
+                            fire_tab('prev' if _tab_accum_x > 0 else 'next')
                         _tab_accum_y = 0.0
-                    elif x_deltas or y_deltas:
-                        avg_x = sum(x_deltas) / len(x_deltas) if x_deltas else 0
-                        avg_y = sum(y_deltas) / len(y_deltas) if y_deltas else 0
-
-                        if abs(avg_x) >= abs(avg_y):
-                            # 3-finger horizontal → browser tab next/prev
-                            _tab_accum_x += avg_x
-                            if abs(_tab_accum_x) >= TAB_THRESHOLD:
-                                fire_tab('prev' if _tab_accum_x > 0 else 'next')
-                            _tab_accum_y = 0.0
-                        else:
-                            # 3-finger vertical → browser tab close/new
-                            _tab_accum_y += avg_y
-                            if abs(_tab_accum_y) >= TAB_THRESHOLD:
-                                fire_tab('new' if _tab_accum_y > 0 else 'close')
-                            _tab_accum_x = 0.0
-                    _edge_resize_accum = 0.0
-
-            elif n == 5:
-                # 5-finger pinch → column resize
-                # Require all 5 slots actively moving to avoid 4-finger swipe + palm misfires.
-                active5 = sum(1 for k in slots
-                              if abs(slot_x_delta.get(k, 0)) + abs(slot_y_delta.get(k, 0)) >= 40)
-                x_deltas = list(slot_x_delta.values())
-                has_pos = any(d > 0 for d in x_deltas)
-                has_neg = any(d < 0 for d in x_deltas)
-                if active5 == 5 and x_deltas and has_pos and has_neg:
-                    xs = [s['x'] for s in slots.values() if s['x'] is not None]
-                    if len(xs) == 5:
-                        spread = max(xs) - min(xs)
-                        if _prev_dist is not None:
-                            _pinch_accum += spread - _prev_dist
-                            if abs(_pinch_accum) >= PINCH_THRESHOLD:
-                                fire_pinch(_pinch_accum > 0)
-                        _prev_dist = spread
-                else:
-                    _pinch_accum = 0.0
-                    _prev_dist   = None
-
-            elif n >= 4 and slot_x_delta:
-                # 4-finger horizontal → column navigation, with velocity accumulation
-                avg_delta = sum(slot_x_delta.values()) / len(slot_x_delta)
-                _scroll_accum += avg_delta
-                while abs(_scroll_accum) >= SCROLL_THRESHOLD:
-                    direction = 'l' if _scroll_accum > 0 else 'r'
-                    fire_scroll(direction)
-                    _scroll_accum -= SCROLL_THRESHOLD if _scroll_accum > 0 else -SCROLL_THRESHOLD
+                    else:
+                        # 3-finger vertical → browser tab close/new (up = close)
+                        _tab_accum_y += avg_y
+                        if abs(_tab_accum_y) >= TAB_THRESHOLD:
+                            fire_tab('new' if _tab_accum_y > 0 else 'close')
+                        _tab_accum_x = 0.0
 
             else:
-                _scroll_accum      = 0.0
-                _tab_accum_x       = 0.0
-                _tab_accum_y       = 0.0
-                _pinch_accum       = 0.0
-                _prev_dist         = None
-                _nav_accum         = 0.0
-                _zoom_accum        = 0.0
-                _zoom_dist         = None
-                _edge_resize_accum = 0.0
+                _tab_accum_x = 0.0
+                _tab_accum_y = 0.0
+                _nav_accum = 0.0
+                _zoom_accum = 0.0
+                _zoom_dist = None
 
             slot_x_delta.clear()
             slot_y_delta.clear()

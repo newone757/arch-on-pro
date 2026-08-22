@@ -5,8 +5,9 @@ hl.config({
   general = {
     gaps_out = 6,
 
-    -- niri-like side-scrolling layout instead of the 4.0 default (dwindle).
-    layout = "scrolling",
+    -- Settled back on dwindle (the 4.0 default) after trying the niri-like
+    -- scrolling layout — was toggling back to dwindle every session anyway.
+    layout = "dwindle",
   },
 })
 
@@ -23,17 +24,11 @@ hl.config({
   },
 })
 
--- https://wiki.hypr.land/Configuring/Layouts/Scrolling-Layout/
-hl.config({
-  scrolling = {
-    wrap_focus = false,
-    fullscreen_on_one_column = true,
-    column_width = 0.5,
-    focus_fit_method = 1,
-    follow_focus = true,
-    follow_min_visible = 0.1,
-  },
-})
+-- Scrolling-layout tuning removed — settled on dwindle instead (see
+-- `general.layout` above). If revisiting the niri-like scrolling layout,
+-- the old values (wrap_focus=false, fullscreen_on_one_column=true,
+-- column_width=0.5, focus_fit_method=1, follow_focus=true,
+-- follow_min_visible=0.1) are in git history.
 
 -- Style Gum confirm prompts (used by various omarchy-* scripts) to match
 -- the terminal theme.
