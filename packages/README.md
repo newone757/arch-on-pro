@@ -43,7 +43,15 @@ user additions but aren't — confirmed preinstalled: **`zen-browser-twilight-bi
 - **Misc:** `miniaturo-git`
 
 ### Already captured elsewhere (don't need manual reinstall reasoning)
-- **EasyEffects speaker EQ:** `easyeffects` + `calf` + `mda.lv2` + `rnnoise` → `bin/setup-easyeffects` + presets
+- **EasyEffects speaker EQ:** `easyeffects` + `calf` + `mda.lv2` + `rnnoise` + **`rtkit`** → `bin/setup-easyeffects` + presets.
+  `rtkit` isn't EasyEffects-specific — it's baseline PipeWire infrastructure (grants
+  audio threads realtime scheduling so they aren't starved by other CPU load) that
+  was simply missing from this fresh 4.0 install entirely. Without it, PipeWire/
+  WirePlumber/EasyEffects threads all run at normal priority, causing audible pops
+  under load (confirmed via `ps -eLo pid,tid,rtprio,comm` — none had `rtprio` set;
+  `journalctl -u rtkit-daemon` showed it granting RT priority successfully once
+  installed). Bundled into `setup-easyeffects` since that's what surfaced the bug,
+  but it benefits the whole audio stack regardless of whether EasyEffects is used.
 - **Spotify:** webapp, not a package → `../local/share/applications/Spotify.desktop`
 - **Windows VM:** `freerdp` + `openbsd-netcat` + Docker image `dockurr/windows` → `config/windows/` + README
 - **Widevine DRM:** `widevine` → part of `bin/setup-brave`
