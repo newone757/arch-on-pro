@@ -18,7 +18,7 @@ import sys
 import evdev
 from evdev import ecodes as e
 
-TRACKPAD_DEV     = '/dev/input/event4'
+TRACKPAD_DEV     = '/dev/input/by-path/platform-39b10c000.spi-cs-0-event-mouse'
 
 # 4-finger column nav tuning
 SCROLL_THRESHOLD = 450
