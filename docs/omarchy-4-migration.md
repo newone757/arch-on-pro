@@ -34,7 +34,7 @@ Hardware / kernel / systemd / PipeWire level — untouched by the Quickshell rew
       actions, not shell. ⚠️ Re-check hardcoded `TRACKPAD_DEV=/dev/input/event4` after install.
 - [ ] ✅ **fn-key mode** — `etc/modprobe.d/hid_apple.conf` (fnmode=1).
 - [ ] ✅ **Hide macOS partitions** — `etc/udev/rules.d/99-hide-macos-partitions.rules`.
-- [ ] ✅ **Notch kernel flag** — `appledrm.show_notch=1` in GRUB. *Panel-alignment part is lost (Tier C).*
+- [ ] ✅ **Notch kernel flag** — `appledrm.show_notch=1` in GRUB. Applied and confirmed post-reboot. *Panel-alignment part redone in Tier C — see below, done.*
 - [ ] ✅ **fastfetch branding** — `config/fastfetch/config.jsonc`, `config/omarchy/branding/about.txt`.
 - [ ] ✅ **Brave flags / Widevine ARM** — `config/brave-flags.conf`, `bin/setup-brave`, `bin/setup-zen`.
 - [ ] ✅ **App shortcuts** — `local/share/applications/Lightroom CC.desktop` (+icon),
@@ -91,8 +91,18 @@ as Quickshell QML / 4.0 config.
       *daemon* survives (Tier A); only this bar indicator is gone → Quickshell widget or drop.
 - [ ] 🔴 **Toggle-bar binding** — `Super+W → omarchy-toggle-waybar`. No Waybar to toggle;
       rebind to the Quickshell bar toggle (or repurpose the key).
-- [ ] 🔴 **Notch panel alignment** — the 33px-height / reserved-center approach was a
-      Waybar hack. Redo notch avoidance in the Quickshell bar. (Kernel flag stays — Tier A.)
+- [x] ✅ **Notch panel alignment** — done 2026-08-22. Redone for Quickshell as two
+      separate fixes, both in `config/omarchy/`: (1) `shell.json` moves the 5
+      widgets that used to sit in the bar's `center` section (indicators, clock,
+      keyboard-layout, weather, system-update) into `right`, since `center` sits
+      geometrically behind the physical notch and was hiding the clock + the
+      indicators' hover-reveal icons; (2) `shell.toml` (new machine-level style
+      override, separate from `shell.json` — see its header comment) sets
+      `[bar] size-horizontal = 32` so the bar's height matches the notch cutout
+      instead of leaving it poking out below. 32 was tuned by eye against the
+      physical notch; the kernel-reported value (74 native / 2x scale = 37) reads
+      visibly too tall, so don't "correct" it back to 37 if this ever comes up
+      again. (Kernel flag stays — Tier A, already done.)
 - [ ] 🔴 **Launcher bindings** — anything bound to Walker (app launch, theme menu at
       `Super+Shift+Space`, Windows VM focus) → point at the Quickshell launcher.
 - [ ] 🔴 **Mako/OSD** — no tracked config, but if you tuned notifications/OSD live, they're

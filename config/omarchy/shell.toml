@@ -1,0 +1,9 @@
+# Machine-level shell style overrides — layered on top of whatever theme is
+# active, survives theme switches. See /usr/share/omarchy/shell/Commons/Color.qml.
+
+[bar]
+# MacBook Pro 16" M1 (j316) notch alignment. Kernel reports the notch as
+# 74px native (/sys/firmware/devicetree/.../apple,notch-height) = 37px
+# logical at 2x scale, but that read visibly too tall against the actual
+# cutout. Tuned by eye instead: 32 is the value the user confirmed as flush.
+size-horizontal = 32
