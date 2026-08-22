@@ -78,3 +78,13 @@ o.bind("SUPER + mouse_up", "Focus previous column", hl.dsp.focus({ direction = "
 -- whichever layout the active workspace is actually in.
 hl.unbind("SUPER + J")
 o.bind("SUPER + J", "Split or consume window", "~/.config/hypr/scripts/super-j")
+
+-- Restore 3.5.1 muscle memory for these two — both collide with newer 4.0
+-- defaults that happen to land on the same keys (Toggle top bar, Google
+-- Maps). The underlying actions still exist elsewhere (SUPER+SHIFT+CTRL+
+-- SPACE for theme menu, PRINT for screenshot); this just puts them back on
+-- the keys already in muscle memory.
+hl.unbind("SUPER + SHIFT + SPACE") -- default: Toggle top bar
+o.bind("SUPER + SHIFT + SPACE", "Theme menu", "omarchy-menu toggle theme")
+hl.unbind("SUPER + SHIFT + S") -- default: Google Maps
+o.bind("SUPER + SHIFT + S", "Screenshot", "omarchy-capture-screenshot")
