@@ -116,7 +116,7 @@ Gestures handled by the daemon:
 
 **Fastfetch branding** — `branding/about.txt` uses the built-in Arch Linux ASCII logo (two-tone red/blue) with block-style "ARM" text beneath it, replacing the default Omarchy logo.
 
-**Waypaper** — GUI wallpaper picker (`yay -S waypaper`). Config sets backend to `swaybg` (matching omarchy's default), wallpaper folder to `~/Wallpapers`, and 3-column grid. The `post_command` updates `~/.config/omarchy/current/background` (a symlink hyprlock reads) so the lock screen wallpaper always matches the desktop. Scroll speed boosted via `scroll_touchpad 0.4` in `input.conf`.
+**Waypaper** — GUI wallpaper picker (`yay -S waypaper`). Omarchy 4.0 note: no compositor-level backend (swaybg/swww/hyprpaper) is installed or needed — Quickshell paints the background itself — so `backend = none`. The `post_command` calls `omarchy-theme-bg-set "$wallpaper"`, the 4.0 helper that updates `~/.local/state/omarchy/current/background` (moved from `~/.config/omarchy/current/background` in 3.5.1 — both Quickshell's background plugin and its lock screen read this new path) and pushes the change to the live shell over IPC so it applies instantly. Wallpaper folder `~/Wallpapers`, 3-column grid. Scroll speed boosted via `scroll_touchpad 0.4` in `input.conf`.
 
 ---
 
