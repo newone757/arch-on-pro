@@ -1,0 +1,16 @@
+#!/bin/bash
+# Like omarchy-theme-bg-switcher, but shows the current theme's curated
+# backgrounds first, then the general personal wallpaper library after —
+# a single browsable list instead of being scoped to just the theme.
+
+theme_name=$(cat "$HOME/.local/state/omarchy/current/theme.name" 2>/dev/null)
+current_background=$(readlink -f "$HOME/.local/state/omarchy/current/background" 2>/dev/null)
+
+background=$(omarchy-menu-images \
+  --selected "$current_background" \
+  --filterable \
+  "$HOME/.local/state/omarchy/current/theme/backgrounds" \
+  "$HOME/.config/omarchy/backgrounds/$theme_name" \
+  "$HOME/Wallpapers")
+
+[[ -n $background ]] && omarchy-theme-bg-set "$background"

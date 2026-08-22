@@ -96,3 +96,11 @@ o.bind("SUPER + SHIFT + S", "Screenshot", "omarchy-capture-screenshot")
 -- as the 3.5.1 config did for the same reason.
 hl.unbind("SUPER + SHIFT + M")
 o.bind("SUPER + SHIFT + M", "Music", { webapp = "https://open.spotify.com" })
+
+-- Background switcher: the default (omarchy-theme-bg-switcher) only shows
+-- the active theme's own backgrounds/ + its per-theme user-override folder —
+-- fine for a per-theme curated set, but not for browsing one general
+-- personal wallpaper library. omarchy-bg-switcher-full shows both: theme
+-- backgrounds first, then ~/Wallpapers, in one filterable list.
+hl.unbind("SUPER + CTRL + SPACE")
+o.bind("SUPER + CTRL + SPACE", "Background switcher", "omarchy-bg-switcher-full")

@@ -143,6 +143,17 @@ cp bin/omarchy-icons-apply-color ~/.local/bin/
 chmod +x ~/.local/bin/omarchy-icons-apply-color
 ```
 
+`bin/omarchy-bg-switcher-full` needs the same treatment — the
+`SUPER+CTRL+SPACE` background-switcher keybind (`config/hypr/bindings.lua`)
+calls it by bare name. It's the stock `omarchy-theme-bg-switcher` picker
+extended to also browse `~/Wallpapers` after the active theme's own
+backgrounds, instead of being scoped to just the theme:
+
+```bash
+cp bin/omarchy-bg-switcher-full ~/.local/bin/
+chmod +x ~/.local/bin/omarchy-bg-switcher-full
+```
+
 **EasyEffects** (PipeWire system-wide EQ and dynamics for MacBook speakers):
 
 ```bash
