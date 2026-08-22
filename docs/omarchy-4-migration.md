@@ -111,7 +111,10 @@ background source, autostart mechanism).
     which are smarter than the old config's blunt lock+suspend (they
     correctly skip locking when docked in clamshell mode with an external
     display).
-- [ ] 🟡 **EasyEffects autostart** — was login-autostart; re-add via 4.0's autostart mechanism.
+- [x] ✅ **EasyEffects autostart** — done 2026-08-22. `config/hypr/autostart.lua`:
+      `o.launch_on_start("easyeffects --service-mode")` (the current flag; the
+      old `--gapplication-service` is deprecated). Runs the MBP 16 M1 preset's
+      filter chain headless, no window, on Hyprland start.
 - [ ] 🟡 **Icon theming** — `bin/omarchy-icons-apply-color` + OmarchyIcons fork.
       Depends on the `theme-set` hook still firing (Tier C) and reads the accent from the
       palette — verify against the new 24-color `colors.toml` format.
