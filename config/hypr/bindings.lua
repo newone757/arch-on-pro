@@ -88,3 +88,11 @@ hl.unbind("SUPER + SHIFT + SPACE") -- default: Toggle top bar
 o.bind("SUPER + SHIFT + SPACE", "Theme menu", "omarchy-menu toggle theme")
 hl.unbind("SUPER + SHIFT + S") -- default: Google Maps
 o.bind("SUPER + SHIFT + S", "Screenshot", "omarchy-capture-screenshot")
+
+-- Default Music binding (omarchy-launch-spotify) checks for a native
+-- /usr/bin/spotify binary first and falls back to launching an installer
+-- when it's missing — there's no ARM64 build, so on this machine it opens
+-- an installer prompt instead of music. Bind straight to the webapp, same
+-- as the 3.5.1 config did for the same reason.
+hl.unbind("SUPER + SHIFT + M")
+o.bind("SUPER + SHIFT + M", "Music", { webapp = "https://open.spotify.com" })
