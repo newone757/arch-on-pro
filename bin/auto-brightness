@@ -9,6 +9,7 @@ Eased ramping respects manual slider changes on the display; keyboard always aut
 
 import collections
 import glob
+import json
 import os
 import signal
 import subprocess
@@ -19,12 +20,36 @@ def notify(summary, body="", urgency="low", timeout=2500):
     try:
         subprocess.Popen(
             ["notify-send", "-u", urgency, "-t", str(timeout),
-             "-a", "auto-brightness", "-i", "display-brightness",
+             "-a", "auto-brightness", "-i", "display-brightness-symbolic",
              summary] + ([body] if body else []),
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
         )
     except Exception:
         pass
+
+# ---------------------------------------------------------------------------
+# Status file — read by the monitor bar panel to show live lux/state. Written
+# at most once a second; consumers should treat a missing/stale file as
+# "unknown" rather than an error.
+# ---------------------------------------------------------------------------
+
+STATUS_FILE = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "auto-brightness-status.json")
+STATUS_WRITE_INTERVAL = 10  # loop cycles between writes (~1s at 0.1s poll)
+
+def write_status(lux, target, manual_override):
+    try:
+        with open(STATUS_FILE, "w") as f:
+            json.dump({
+                "lux": lux,
+                "target_pct": round(target * 100.0 / brightness_max_cached[0]) if brightness_max_cached[0] else 0,
+                "manual_override": manual_override,
+                "ts": time.time(),
+            }, f)
+    except Exception:
+        pass
+
+# Small mutable box so write_status can see brightness_max without a global.
+brightness_max_cached = [500]
 
 # ---------------------------------------------------------------------------
 # Tuning — display
@@ -203,6 +228,7 @@ def main():
     if disp_cur is None:
         print("auto-brightness: cannot read display brightness, exiting", flush=True)
         sys.exit(1)
+    brightness_max_cached[0] = disp_max
 
     kb_max_val = kb_max()
     kb_cur     = kb_get() or 0
@@ -212,8 +238,15 @@ def main():
           f"poll={POLL_INTERVAL}s", flush=True)
     notify("Auto-brightness active")
 
-    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
-    signal.signal(signal.SIGINT,  lambda *_: sys.exit(0))
+    def cleanup_status(*_):
+        try:
+            os.remove(STATUS_FILE)
+        except Exception:
+            pass
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, cleanup_status)
+    signal.signal(signal.SIGINT,  cleanup_status)
 
     last_set        = disp_cur
     manual_override = False
@@ -223,6 +256,7 @@ def main():
     applied_lux     = None   # smoothed lux at which we last computed disp_target
     last_target     = disp_cur  # last legitimately computed target; pursued even
                                  # while the deadband is suppressing recalculation
+    status_cycles   = 0
 
     while True:
         time.sleep(POLL_INTERVAL)
@@ -270,6 +304,11 @@ def main():
                 disp_cur        = actual
                 last_set        = actual
                 idle_cycles     = 0
+
+        status_cycles += 1
+        if status_cycles >= STATUS_WRITE_INTERVAL:
+            status_cycles = 0
+            write_status(lux, last_target, manual_override)
 
         if manual_override:
             if lux_changed_enough(lux, override_lux):
