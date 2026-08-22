@@ -56,12 +56,13 @@ hl.env("GUM_CONFIRM_UNSELECTED_BACKGROUND", "8") -- Dark grey
 -- })
 
 -- 4.0's default disables the workspaces animation entirely (enabled=false),
--- so workspace switches (including the 4-finger vertical gesture in
--- input.lua) fell back to a generic transition instead of a vertical slide.
--- Re-enable with the vertical style to match the gesture direction.
-hl.animation({ leaf = "workspaces", enabled = true, speed = 8, bezier = "default", style = "slidevert" })
-hl.animation({ leaf = "workspacesIn", enabled = true, speed = 8, bezier = "default", style = "slidevert" })
-hl.animation({ leaf = "workspacesOut", enabled = true, speed = 8, bezier = "default", style = "slidevert" })
+-- so workspace switches (including the 4-finger gesture in input.lua) fell
+-- back to a generic transition instead of a directional slide. Style must
+-- match the gesture direction in input.lua — horizontal gesture, horizontal
+-- slide ("slide", not "slidevert").
+hl.animation({ leaf = "workspaces", enabled = true, speed = 8, bezier = "default", style = "slide" })
+hl.animation({ leaf = "workspacesIn", enabled = true, speed = 8, bezier = "default", style = "slide" })
+hl.animation({ leaf = "workspacesOut", enabled = true, speed = 8, bezier = "default", style = "slide" })
 
 -- https://wiki.hypr.land/Configuring/Basics/Variables/#animations
 -- hl.config({

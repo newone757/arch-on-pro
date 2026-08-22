@@ -20,6 +20,22 @@ o.window("org.gnome.Nautilus", { scroll_touchpad = 1.5 })
 o.window("waypaper", { scroll_touchpad = 0.4 })
 o.window("Aether", { scroll_touchpad = 0.4 })
 
--- 4-finger vertical: switch workspaces (3-finger handled separately by the
+-- 4-finger horizontal: switch workspaces (3-finger handled separately by the
 -- super-scroll-dispatch daemon — see autostart.lua).
-hl.gesture({ fingers = 4, direction = "vertical", action = "workspace" })
+hl.gesture({ fingers = 4, direction = "horizontal", action = "workspace" })
+
+hl.gesture({
+  fingers = 4,
+  direction = "up",
+  action = function()
+    hl.dispatch(hl.dsp.exec_cmd("omarchy-shell shell summon mirador '{}'"))
+  end,
+})
+
+hl.gesture({
+  fingers = 4,
+  direction = "down",
+  action = function()
+    hl.dispatch(hl.dsp.exec_cmd("omarchy-shell shell hide mirador"))
+  end,
+})

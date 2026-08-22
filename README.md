@@ -154,6 +154,26 @@ cp bin/omarchy-bg-switcher-full ~/.local/bin/
 chmod +x ~/.local/bin/omarchy-bg-switcher-full
 ```
 
+**Third-party shell plugins** (not vendored in this repo — each has its own
+upstream git repo, installed via `omarchy plugin add`):
+
+- **[Mirador](https://github.com/sanjyay/Mirador)** — workspace overview
+  panel. `config/omarchy/shell.json`'s top-level `plugins` array enables it;
+  `config/hypr/input.lua` binds 4-finger swipe up/down to summon/hide it
+  (`omarchy-shell shell summon mirador '{}'` / `... hide mirador`), and
+  `config/hypr/bindings.lua` also binds `SHIFT+TAB` to toggle it.
+  ```bash
+  omarchy plugin add https://github.com/sanjyay/Mirador --enable
+  ```
+- **[omaplug](https://github.com/fross100/omaplug)** — plugin manager bar
+  widget (browse/install/update/remove plugins from the bar). Has a known
+  bug re-enabling bar-widget-kind plugins from its own UI — see
+  `docs/omaplug-bar-widget-reenable-bug.md`. Use the official
+  `omarchy plugin enable/disable <id>` CLI for bar widgets specifically.
+  ```bash
+  omarchy plugin add https://github.com/fross100/omaplug --enable
+  ```
+
 **EasyEffects** (PipeWire system-wide EQ and dynamics for MacBook speakers):
 
 ```bash

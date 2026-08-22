@@ -35,6 +35,9 @@
           "id": "omarchy.tray"
         },
         {
+          "id": "omaplug"
+        },
+        {
           "id": "omarchy.agents"
         },
         {
@@ -64,5 +67,9 @@
       ]
     }
   },
-  "plugins": []
+  "plugins": [
+    {
+      "id": "mirador"
+    }
+  ]
 }

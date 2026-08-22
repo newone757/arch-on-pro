@@ -104,3 +104,9 @@ o.bind("SUPER + SHIFT + M", "Music", { webapp = "https://open.spotify.com" })
 -- backgrounds first, then ~/Wallpapers, in one filterable list.
 hl.unbind("SUPER + CTRL + SPACE")
 o.bind("SUPER + CTRL + SPACE", "Background switcher", "omarchy-bg-switcher-full")
+
+o.bind(
+  "SHIFT + TAB",
+  "Workspace overview",
+  "omarchy-shell shell toggle mirador '{}'"
+)
