@@ -177,6 +177,7 @@ python-screeninfo
 python-terminaltexteffects
 qrcodegencpp-cmake
 qt5-wayland
+qt6-imageformats
 qt6-wayland
 ripgrep
 rnnoise

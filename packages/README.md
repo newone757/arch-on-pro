@@ -52,6 +52,17 @@ user additions but aren't — confirmed preinstalled: **`zen-browser-twilight-bi
   `journalctl -u rtkit-daemon` showed it granting RT priority successfully once
   installed). Bundled into `setup-easyeffects` since that's what surfaced the bug,
   but it benefits the whole audio stack regardless of whether EasyEffects is used.
+- **WebP wallpaper support:** `qt6-imageformats` — Quickshell's background plugin
+  (`Background.qml`) renders the actual wallpaper via a plain QML `Image` element,
+  which only decodes formats Qt6 ships built-in (png/jpg/bmp/gif) unless this
+  plugin package is installed. `.webp` files were showing fine in the picker
+  (its thumbnails are generated independently via `libvips`, always as `.jpg`)
+  but silently failed to apply as the actual background — installing this
+  package fixes it, no reboot needed.
+- **`sg3_utils`** — needed by `bin/cardreader-unstop` + the udev rule in
+  `etc/udev/rules.d/`, which auto-clears USB card readers left in SCSI
+  STOPPED state by a file-manager "eject" (see
+  `docs/sd-card-reader-uhs2-broken.md`). Without it the rule silently no-ops.
 - **Spotify:** webapp, not a package → `../local/share/applications/Spotify.desktop`
 - **Windows VM:** `freerdp` + `openbsd-netcat` + Docker image `dockurr/windows` → `config/windows/` + README
 - **Widevine DRM:** `widevine` → part of `bin/setup-brave`
