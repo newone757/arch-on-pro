@@ -1,15 +1,24 @@
 #!/bin/bash
 # RDP into the Windows 11 VM running on the desktop.
 #
-# Host/user are placeholders -- this repo is public. Set RDP_HOST/RDP_USER,
+# Host is a placeholder -- this repo is public. Set RDP_HOST/RDP_USER,
 # or edit the defaults below after restoring.
 #
 # That VM is x86_64 with 16G/8-cores, so it runs Lightroom Classic and
 # Capture One natively -- unlike a local ARM VM on this MacBook, where
 # Classic has no ARM64 build at all.
 #
-# Password is prompted for, deliberately: not stored on disk, not baked into
-# this script, and not visible in the process list (which /p:<pw> would be).
+# Password handling: looked up from the GNOME login keyring via secret-tool
+# and piped in on stdin (/from-stdin), so it is never in the process list
+# (which /p:<pw> would be) and never in plaintext on disk. If no keyring
+# entry exists the script falls back to FreeRDP's own interactive prompt,
+# so it still works on a machine where the secret was never stored.
+#
+# To store (or change) the password -- run in a real terminal, it prompts:
+#   secret-tool store --label="Desktop Windows VM (RDP)" \
+#     service desktop-windows-rdp user lonnie
+# To remove it:
+#   secret-tool clear service desktop-windows-rdp user lonnie
 set -euo pipefail
 
 HOST="${RDP_HOST:-DESKTOP_IP}"
@@ -23,18 +32,35 @@ SCALE="${RDP_SCALE:-180}"
 # No VAAPI on Asahi -- hardware H.264 decode always fails and falls back to
 # software after a retry, so ask for software decode up front rather than
 # paying for the failed probe on every frame.
-exec xfreerdp3 \
-  /v:"$HOST" \
-  /u:"$USER_NAME" \
-  /cert:ignore \
-  /scale:"$SCALE" \
-  /dynamic-resolution \
-  /gfx:AVC444 \
-  /gdi:sw \
-  /sound:sys:pulse \
-  /clipboard \
-  +fonts \
-  +window-drag \
-  /compression-level:2 \
-  /log-level:WARN \
-  "$@"
+#
+# /d: is passed empty on purpose: this VM is a standalone workgroup machine,
+# not domain-joined, and without it FreeRDP stops to prompt for a domain.
+args=(
+  /v:"$HOST"
+  /u:"$USER_NAME"
+  /d:
+  /cert:ignore
+  /scale:"$SCALE"
+  /dynamic-resolution
+  /gfx:AVC444
+  /gdi:sw
+  /sound:sys:pulse
+  /clipboard
+  +fonts
+  +window-drag
+  /compression-level:2
+  /log-level:WARN
+)
+
+PW="$(secret-tool lookup service desktop-windows-rdp user "$USER_NAME" 2>/dev/null || true)"
+
+if [ -n "$PW" ]; then
+  # force: read the credential up front rather than waiting for the server to
+  # ask, so the pipe is consumed deterministically instead of racing the
+  # connection handshake.
+  printf '%s\n' "$PW" | exec xfreerdp3 "${args[@]}" /from-stdin:force "$@"
+else
+  echo "desktop-windows-rdp: no keyring entry found, prompting." >&2
+  echo "  store it with: secret-tool store --label=\"Desktop Windows VM (RDP)\" service desktop-windows-rdp user $USER_NAME" >&2
+  exec xfreerdp3 "${args[@]}" "$@"
+fi

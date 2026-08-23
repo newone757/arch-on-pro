@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Windows VM (Desktop)
+GenericName=Remote Desktop
+Comment=RDP into the Windows 11 VM on the desktop PC (set RDP_HOST)
+Exec=/home/lonnie/.local/bin/desktop-windows-rdp
+Icon=/usr/share/icons/Papirus-Dark/64x64/apps/chrome-remote-desktop.svg
+Terminal=false
+Categories=Network;RemoteAccess;
+Keywords=rdp;remote;windows;vm;lightroom;
+StartupNotify=true
+StartupWMClass=xfreerdp3
