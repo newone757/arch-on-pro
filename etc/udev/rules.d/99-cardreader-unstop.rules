@@ -1,0 +1,16 @@
+# Auto-recover any USB mass-storage device left in SCSI STOPPED state.
+#
+# The file manager's "eject" sends START STOP UNIT (stop bit). Some card
+# readers latch that across unplug/replug, so the next insert shows 0-byte
+# devices and resets every ~30s. This sends START UNIT on plug-in to clear it,
+# keeping the GUI eject button safe to use.
+#
+# Matches USB interface class 08 (mass storage) rather than one vendor/product,
+# so it covers every reader, not just the one that happened to break first.
+# The helper only touches devices reporting zero capacity, so healthy drives
+# and non-storage devices are unaffected.
+#
+# systemd-run --no-block: udev RUN has a short timeout and the helper sleeps
+# while the kernel settles; running it inline would stall udev.
+ACTION=="add", SUBSYSTEM=="usb", ENV{ID_USB_INTERFACES}=="*:08*", \
+  RUN+="/usr/bin/systemd-run --no-block --unit=cardreader-unstop-$env{ID_SERIAL_SHORT} /usr/local/bin/cardreader-unstop $env{ID_MODEL}"

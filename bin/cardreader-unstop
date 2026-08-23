@@ -1,0 +1,62 @@
+#!/bin/bash
+# Un-latch USB card readers / mass-storage devices left in SCSI STOPPED state.
+#
+# Background: the file-manager "eject" sends SCSI START STOP UNIT (stop bit).
+# Some readers latch that state and keep it across unplug/replug, so the next
+# insert enumerates but presents 0-byte block devices and resets every ~30s.
+# Sending START UNIT clears it. Run from udev on plug-in so the GUI eject
+# button stays safe to use, on any reader rather than one hard-coded model.
+#
+# Deliberately conservative: only touches devices reporting ZERO capacity,
+# i.e. ones that are either stuck or genuinely empty. A working reader with a
+# card in it is never touched, and START UNIT on a truly empty slot is a
+# harmless no-op ("not ready").
+#
+# Identification is done purely through sysfs. Do NOT probe with sg_inq --
+# when a unit is latched even INQUIRY hangs, which is the whole problem.
+
+LOG="/run/cardreader-unstop.log"
+exec >>"$LOG" 2>&1
+echo "--- $(date '+%F %T') triggered by ${1:-manual} ---"
+
+# Let the kernel finish creating sg/sd nodes after enumeration.
+sleep 3
+
+acted=0
+for blk in /sys/block/sd*; do
+  [ -e "$blk/size" ] || continue
+
+  # Only USB-attached devices -- never poke internal SATA/NVMe.
+  readlink -f "$blk" | grep -q '/usb[0-9]' || continue
+
+  size=$(cat "$blk/size" 2>/dev/null || echo 0)
+  [ "$size" = "0" ] || continue          # healthy device: leave alone
+
+  name=$(basename "$blk")
+  sg=$(ls "$blk/device/scsi_generic" 2>/dev/null | head -1)
+  [ -n "$sg" ] || continue
+
+  echo "$name reports 0 sectors -> START UNIT on /dev/$sg"
+  timeout 15 sg_start --start "/dev/$sg" 2>&1 | sed 's/^/    /'
+  acted=1
+done
+
+if (( acted == 0 )); then
+  echo "nothing stuck; no action"
+  exit 0
+fi
+
+sleep 2
+
+# Capacity was cached as 0 while stopped, so force sd to re-probe.
+for blk in /sys/block/sd*; do
+  [ -e "$blk/device/rescan" ] || continue
+  readlink -f "$blk" | grep -q '/usb[0-9]' || continue
+  echo 1 > "$blk/device/rescan" 2>/dev/null
+done
+
+sleep 2
+for blk in /sys/block/sd*; do
+  [ -e "$blk/size" ] && echo "  $(basename "$blk"): $(cat "$blk/size") sectors"
+done
+echo "done"
