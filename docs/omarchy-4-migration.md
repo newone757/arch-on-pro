@@ -168,6 +168,16 @@ as Quickshell QML / 4.0 config.
 - [ ] 🔴 **Waybar, entirely** — `config/waybar/{config.jsonc,style.css,theme-colors.css}`.
       Rebuild in Quickshell: floating-pill look, module layout, clock-far-right,
       **6px side margins**, **33px height notch alignment**, `#custom-omarchy` logo color.
+      **Pill look attempted 2026-08-22, blocked** — see
+      `docs/bar-plugin-clone-required-property-bug.md`. Wrote the two-rounded-
+      group QML rework (`omarchy plugin clone omarchy.bar` → edited
+      `Bar.qml`), but the shell's plugin-bar loader is broken upstream (fails
+      even for an unedited clone), so it's never actually rendered live.
+      Finished code is parked at `~/.config/omarchy/plugins/lonnie.bar/Bar.qml`,
+      inactive; `shell.json` `bar.id` reverted to `"omarchy.bar"`. Retry after
+      a future `omarchy update`. Module layout / clock-right / notch alignment
+      themselves are already done (see the Tier C notch-alignment item below)
+      — only the pill *background shape* is still outstanding.
 - [ ] 🔴 **Battery tooltip** (time-remaining / watts / capacity) — reimplement as a
       Quickshell widget.
 - [ ] 🔴 **waybar-brightness readout** — `bin/waybar-brightness`. The auto-brightness
