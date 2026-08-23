@@ -29,6 +29,15 @@ USER_NAME="${RDP_USER:-lonnie}"
 # closest RDP DPI step to the 200% the display actually runs at.
 SCALE="${RDP_SCALE:-180}"
 
+# RDP negotiates two independent scale factors. /scale is DesktopScaleFactor
+# (how large the UI is drawn); /scale-device is DeviceScaleFactor, which is
+# what the mouse pointer follows. Leaving device at 180 to match made the
+# cursor render huge, since Windows draws the pointer server-side at that
+# scale and the client never downsizes it. 100 keeps the UI at 180% while
+# giving a normal-sized cursor. Both are negotiated at connect time, so a
+# change needs a reconnect. Valid values are 100, 140 and 180 only.
+SCALE_DEVICE="${RDP_SCALE_DEVICE:-100}"
+
 # No VAAPI on Asahi -- hardware H.264 decode always fails and falls back to
 # software after a retry, so ask for software decode up front rather than
 # paying for the failed probe on every frame.
@@ -41,6 +50,7 @@ args=(
   /d:
   /cert:ignore
   /scale:"$SCALE"
+  /scale-device:"$SCALE_DEVICE"
   /dynamic-resolution
   /gfx:AVC444
   /gdi:sw
