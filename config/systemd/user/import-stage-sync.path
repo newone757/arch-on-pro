@@ -1,0 +1,9 @@
+[Unit]
+Description=Watch ~/Import-Staging for dropped photos
+
+[Path]
+PathChanged=%h/Import-Staging
+Unit=import-stage-sync.service
+
+[Install]
+WantedBy=default.target

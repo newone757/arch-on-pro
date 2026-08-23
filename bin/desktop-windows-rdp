@@ -1,0 +1,40 @@
+#!/bin/bash
+# RDP into the Windows 11 VM running on the desktop.
+#
+# Host/user are placeholders -- this repo is public. Set RDP_HOST/RDP_USER,
+# or edit the defaults below after restoring.
+#
+# That VM is x86_64 with 16G/8-cores, so it runs Lightroom Classic and
+# Capture One natively -- unlike a local ARM VM on this MacBook, where
+# Classic has no ARM64 build at all.
+#
+# Password is prompted for, deliberately: not stored on disk, not baked into
+# this script, and not visible in the process list (which /p:<pw> would be).
+set -euo pipefail
+
+HOST="${RDP_HOST:-DESKTOP_IP}"
+USER_NAME="${RDP_USER:-lonnie}"
+
+# HiDPI: this panel is 3456x2234 at 2x scale, so without /scale the Windows
+# UI renders at native resolution and comes out microscopic. 180 is the
+# closest RDP DPI step to the 200% the display actually runs at.
+SCALE="${RDP_SCALE:-180}"
+
+# No VAAPI on Asahi -- hardware H.264 decode always fails and falls back to
+# software after a retry, so ask for software decode up front rather than
+# paying for the failed probe on every frame.
+exec xfreerdp3 \
+  /v:"$HOST" \
+  /u:"$USER_NAME" \
+  /cert:ignore \
+  /scale:"$SCALE" \
+  /dynamic-resolution \
+  /gfx:AVC444 \
+  /gdi:sw \
+  /sound:sys:pulse \
+  /clipboard \
+  +fonts \
+  +window-drag \
+  /compression-level:2 \
+  /log-level:WARN \
+  "$@"

@@ -1,0 +1,10 @@
+[Unit]
+Description=Retry staged-photo sync (covers desktop-off / wifi-drop)
+
+[Timer]
+OnBootSec=5min
+OnUnitInactiveSec=5min
+Unit=import-stage-sync.service
+
+[Install]
+WantedBy=timers.target

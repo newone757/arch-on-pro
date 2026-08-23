@@ -1,0 +1,40 @@
+[Unit]
+Description=Mount desktop's Windows-VM shared folder (drag-and-drop target for culled photos)
+# The desktop's ~/Windows is bind-mounted into the Windows VM as /shared, so
+# anything dropped into this mount appears inside Windows immediately -- the
+# VM reads it from local disk and never pulls it back over the network.
+After=network-online.target
+Wants=network-online.target
+
+# NOTE: USER@DESKTOP_IP are placeholders -- this repo is public.
+# Edit them after restoring.
+[Service]
+Type=simple
+ExecStartPre=/usr/bin/mkdir -p %h/Desktop-VM-Drop
+# -f keeps sshfs in the foreground so systemd can supervise it properly.
+# compression=no: RAW files are already compressed; SSH gzip is wasted CPU.
+# reconnect + ServerAlive*: survive wifi drops and laptop suspend when moving
+#   between rooms, instead of leaving a wedged mount behind.
+ExecStart=/usr/bin/sshfs -f \
+  -o reconnect \
+  -o ServerAliveInterval=15 \
+  -o ServerAliveCountMax=3 \
+  -o compression=no \
+  -o cache=yes \
+  -o kernel_cache \
+  -o max_write=1048576 \
+  -o Ciphers=aes128-gcm@openssh.com \
+  -o idmap=user \
+  -o IdentityFile=%h/.ssh/id_ed25519 \
+  -o StrictHostKeyChecking=accept-new \
+  USER@DESKTOP_IP:/home/USER/Windows %h/Desktop-VM-Drop
+ExecStop=/usr/bin/fusermount3 -u %h/Desktop-VM-Drop
+
+# The desktop may be off, or wifi not up yet, when this first tries. Keep
+# retrying quietly rather than failing permanently -- it will attach itself
+# as soon as the desktop is reachable again.
+Restart=always
+RestartSec=20
+
+[Install]
+WantedBy=default.target

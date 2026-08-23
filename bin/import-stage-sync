@@ -1,0 +1,68 @@
+#!/bin/bash
+# Ships anything dropped into ~/Import-Staging up to the desktop's Windows-VM
+# import folder, then removes the local copy.
+#
+# Why this exists: dragging straight onto the sshfs mount makes geeqie block
+# in FUSE on every single file (~8s each), which freezes its UI and trips
+# Hyprland's ANR watchdog. Dropping into a LOCAL folder is instant, and this
+# service does the slow part in the background over plain rsync-over-ssh --
+# which streams continuously instead of doing per-file round-trips, so it is
+# also substantially faster than the FUSE path.
+set -uo pipefail
+
+STAGE="$HOME/Import-Staging"
+# Placeholder -- this repo is public. Set DEST_HOST/DEST_PATH in the
+# environment, or edit these after restoring.
+DEST_HOST="${DEST_HOST:-USER@DESKTOP_IP}"
+DEST_PATH="/home/lonnie/Windows/import/"
+
+SETTLE_SECS=30
+POLL_SECS=20
+MAX_ROUNDS=360   # ~2h ceiling, so a stuck file can never loop forever
+
+cd "$STAGE" 2>/dev/null || exit 0
+
+total=0
+
+for (( round=0; round<MAX_ROUNDS; round++ )); do
+  # Only take files untouched for $SETTLE_SECS -- a file still being written
+  # by geeqie would otherwise ship half-complete and then get deleted by
+  # --remove-source-files.
+  #
+  # NB: `find` here is bfs, not GNU findutils -- it rejects relative
+  # timestamps ("-30 seconds") and demands ISO 8601, so build the cutoff
+  # with date(1).
+  cutoff=$(date -d "-${SETTLE_SECS} seconds" -Iseconds)
+  mapfile -d '' FILES < <(find . -maxdepth 1 -type f ! -newermt "$cutoff" -printf '%P\0' 2>/dev/null)
+
+  if (( ${#FILES[@]} > 0 )); then
+    # aes128-gcm: this CPU has hardware AES (aes pmull sha2); the default
+    #   chacha20-poly1305 is software-only and measurably slower here.
+    # Compression=no: RAW files are already compressed.
+    if printf '%s\0' "${FILES[@]}" \
+      | rsync -a --from0 --files-from=- \
+          --remove-source-files --partial \
+          -e "ssh -o Ciphers=aes128-gcm@openssh.com -o Compression=no -o BatchMode=yes" \
+          ./ "$DEST_HOST:$DEST_PATH"
+    then
+      total=$(( total + ${#FILES[@]} ))
+    else
+      # Desktop off or wifi dropped -- files stay put, timer retries in 5min.
+      notify-send -a "Photo import" -u critical "Sync failed" \
+        "Files still waiting in ~/Import-Staging. Will retry." 2>/dev/null
+      exit 1
+    fi
+  fi
+
+  # Anything left at all? That means files are still settling (or still
+  # arriving, e.g. geeqie is mid-move). Wait and go round again, rather than
+  # exiting and leaving them for the 5-minute retry timer.
+  remaining=$(find . -maxdepth 1 -type f -printf 'x\n' 2>/dev/null | wc -l)
+  (( remaining == 0 )) && break
+  sleep "$POLL_SECS"
+done
+
+if (( total > 0 )); then
+  notify-send -a "Photo import" "Sent to desktop" \
+    "$total file(s) now in the VM import folder." 2>/dev/null
+fi

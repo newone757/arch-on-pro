@@ -1,0 +1,9 @@
+[Unit]
+Description=Ship staged photos to the desktop's VM import folder
+
+[Service]
+Type=oneshot
+# The script drains the folder itself (settle + poll loop), so one drag of
+# 100 files is a single run, and files dropped mid-run are still picked up.
+ExecStart=%h/.local/bin/import-stage-sync
+TimeoutStartSec=3h
