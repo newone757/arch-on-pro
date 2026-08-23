@@ -24,6 +24,18 @@ hl.config({
   },
 })
 
+-- Hyprland's "application is not responding" watchdog fires after this many
+-- missed pings (default 3). Anything that blocks on slow I/O trips it — geeqie
+-- reading RAWs over a network mount blocks in FUSE for seconds at a time and
+-- gets flagged constantly, which hijacks the session mid-transfer for an app
+-- that isn't actually hung. Raised rather than disabled (misc.enable_anr_dialog
+-- = false) so genuinely wedged apps still get caught.
+hl.config({
+  misc = {
+    anr_missed_pings = 30,
+  },
+})
+
 -- Scrolling-layout tuning removed — settled on dwindle instead (see
 -- `general.layout` above). If revisiting the niri-like scrolling layout,
 -- the old values (wrap_focus=false, fullscreen_on_one_column=true,
