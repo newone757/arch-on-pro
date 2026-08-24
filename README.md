@@ -206,7 +206,22 @@ Installs `iio-sensor-proxy`, drops the script into `~/.local/bin/`, and enables 
 
 Installs `titdb-git` from AUR, sets up the `uinput` group and udev rule, loads the `uinput` kernel module at boot, and enables the `titdb` systemd service. Runs in flex mode with left/right edges dead-zoned 10% and bottom 15%. To tune: edit `/etc/systemd/system/titdb.service.d/override.conf` and run `sudo systemctl restart titdb`.
 
-**Windows 11 ARM VM** (dockurr/windows via Docker, connects over RDP):
+**Windows 11 ARM VM** (dockurr/windows via Docker, connects over RDP) — **NOT IN USE.**
+Superseded by remoting into the desktop PC's existing Windows VM, which is far better hardware for it
+(see `bin/desktop-windows-rdp`). The launcher `windows-vm.desktop` was removed from this repo so a fresh
+restore does not install a menu entry for `omarchy-windows-vm`, a command that is not present on this
+machine. **Everything below is kept deliberately** in case a local VM is wanted again — recreate the
+`.desktop` from the Exec line documented here if so:
+
+```
+Exec=uwsm app -- omarchy-launch-or-focus "Windows VM" "omarchy-windows-vm launch"
+```
+
+If rebuilding it, note the sizing lesson: the old compose used `RAM_SIZE: 6G` / `CPU_CORES: 6` on a
+16GB/10-core machine, which hard-froze the host. Use **4G RAM / 4 cores** and pin to the performance
+cores with `cpuset: "2-5"` (cpu0-1 are the 2064MHz efficiency cores). Local VM would be Lightroom CC
+only — Lightroom Classic has no ARM64 build.
+
 
 ```bash
 omarchy-windows-vm install
