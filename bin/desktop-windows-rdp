@@ -62,8 +62,6 @@ args=(
   /u:"$USER_NAME"
   /d:
   /cert:ignore
-  /scale:"$SCALE"
-  /scale-device:"$SCALE_DEVICE"
   /dynamic-resolution
   /gfx:AVC444
   /gdi:sw
@@ -82,7 +80,21 @@ args=(
   -grab-keyboard
 )
 
+# /scale is FreeRDP's shorthand and may set BOTH DesktopScaleFactor and
+# DeviceScaleFactor, so it can clobber an explicit /scale-device. RDP_SCALE=off
+# omits it entirely, which is the only way to test /scale-desktop and
+# /scale-device as an independent pair.
+case "$SCALE" in
+  off|none|"") ;;
+  *) args+=( /scale:"$SCALE" ) ;;
+esac
+
 [ -n "$SCALE_DESKTOP" ] && args+=( /scale-desktop:"$SCALE_DESKTOP" )
+
+case "$SCALE_DEVICE" in
+  off|none|"") ;;
+  *) args+=( /scale-device:"$SCALE_DEVICE" ) ;;
+esac
 
 PW="$(secret-tool lookup service desktop-windows-rdp user "$USER_NAME" 2>/dev/null || true)"
 
