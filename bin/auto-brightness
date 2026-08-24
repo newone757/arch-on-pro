@@ -111,6 +111,29 @@ KB_CURVE = [
 ]
 
 # ---------------------------------------------------------------------------
+# Lock gating
+# ---------------------------------------------------------------------------
+
+# Omarchy's lock screen blanks the keyboard backlight five seconds in
+# (shell/plugins/lock/Service.qml runs `omarchy-brightness-keyboard off`).
+# Nothing here noticed, so the next poll wrote the lux-derived target straight
+# back and the keyboard stayed lit behind a dark screen. The display never had
+# this problem: blanking it to 0 trips the manual-override check in the main
+# loop, which parks the ramp. The keyboard has no such check, so gate it on the
+# compositor's lock state instead.
+LOCK_POLL_CYCLES = 10  # loop cycles between lock checks (~1s at 0.1s poll)
+
+def session_locked():
+    # The helper exits 0 locked, 1 unlocked, 2 undetermined. Treat undetermined
+    # as unlocked, the same way its own callers do.
+    try:
+        return subprocess.run(
+            ["omarchy-hyprland-session-locked"], capture_output=True
+        ).returncode == 0
+    except Exception:
+        return False
+
+# ---------------------------------------------------------------------------
 # Sensor
 # ---------------------------------------------------------------------------
 
@@ -280,6 +303,8 @@ def main():
     last_target     = disp_cur  # last legitimately computed target; pursued even
                                  # while the deadband is suppressing recalculation
     status_cycles   = 0
+    locked          = session_locked()
+    lock_cycles     = 0
 
     while True:
         time.sleep(POLL_INTERVAL)
@@ -290,6 +315,18 @@ def main():
 
         lux_history.append(raw_lux)
         lux = int(round(sum(lux_history) / len(lux_history)))
+
+        lock_cycles += 1
+        if lock_cycles >= LOCK_POLL_CYCLES:
+            lock_cycles = 0
+            now_locked = session_locked()
+            if now_locked != locked:
+                locked = now_locked
+                if not locked:
+                    # `omarchy-system-wake` runs `omarchy-brightness-keyboard
+                    # restore` on unlock. Re-read the LED so the ramp eases from
+                    # the real value instead of jumping from the pre-lock one.
+                    kb_cur = kb_get() or 0
 
         if force_resume_requested[0]:
             force_resume_requested[0] = False
@@ -351,7 +388,7 @@ def main():
                 print(f"auto-brightness: resuming (lux {override_lux}->{lux})", flush=True)
                 notify("Brightness: auto")
             else:
-                if kb_avail:
+                if kb_avail and not locked:
                     kb_target = lux_to_target(lux, KB_CURVE, kb_max_val, KB_MIN_BRIGHTNESS)
                     if kb_cur != kb_target:
                         kb_cur = eased_step(kb_cur, kb_target, KB_SMOOTH_STEP_MAX)
@@ -367,8 +404,8 @@ def main():
         else:
             idle_cycles = min(idle_cycles + 1, 100)
 
-        # Step keyboard
-        if kb_avail:
+        # Step keyboard — never while locked; the lock screen owns the LED.
+        if kb_avail and not locked:
             kb_target = lux_to_target(lux, KB_CURVE, kb_max_val, KB_MIN_BRIGHTNESS)
             if kb_cur != kb_target:
                 kb_cur = eased_step(kb_cur, kb_target, KB_SMOOTH_STEP_MAX)
