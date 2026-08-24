@@ -51,6 +51,16 @@ SCALE_DESKTOP="${RDP_SCALE_DESKTOP:-}"
 # after a FreeRDP update, but do not reach for it as a cursor fix.
 CLIENT="${RDP_CLIENT:-xfreerdp3}"
 
+# Smart-sizing path, for the cursor bug (FreeRDP issue #9687: with scaling on,
+# everything scales except the cursor bitmap). Scaling UP from a smaller remote
+# desktop turns that defect into the fix: the UI enlarges, the cursor does not.
+# Costs sharpness, since bitmaps are scaled client-side. /smart-sizing and
+# /dynamic-resolution are mutually exclusive, so setting RDP_SMART_SIZING
+# switches dynamic-resolution off automatically.
+#   RDP_SMART_SIZING=1 RDP_SIZE=1712x1069 RDP_SCALE=off desktop-windows-rdp
+SMART_SIZING="${RDP_SMART_SIZING:-}"
+SIZE="${RDP_SIZE:-}"
+
 # No VAAPI on Asahi -- hardware H.264 decode always fails and falls back to
 # software after a retry, so ask for software decode up front rather than
 # paying for the failed probe on every frame.
@@ -62,7 +72,6 @@ args=(
   /u:"$USER_NAME"
   /d:
   /cert:ignore
-  /dynamic-resolution
   /gfx:AVC444
   /gdi:sw
   /sound:sys:pulse
@@ -84,6 +93,14 @@ args=(
 # DeviceScaleFactor, so it can clobber an explicit /scale-device. RDP_SCALE=off
 # omits it entirely, which is the only way to test /scale-desktop and
 # /scale-device as an independent pair.
+if [ -n "$SMART_SIZING" ]; then
+  args+=( /smart-sizing )
+  [ -n "$SIZE" ] && args+=( /size:"$SIZE" )
+else
+  args+=( /dynamic-resolution )
+  [ -n "$SIZE" ] && args+=( /size:"$SIZE" )
+fi
+
 case "$SCALE" in
   off|none|"") ;;
   *) args+=( /scale:"$SCALE" ) ;;
