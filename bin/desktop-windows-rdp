@@ -29,14 +29,23 @@ USER_NAME="${RDP_USER:-lonnie}"
 # closest RDP DPI step to the 200% the display actually runs at.
 SCALE="${RDP_SCALE:-180}"
 
-# RDP negotiates two independent scale factors. /scale is DesktopScaleFactor
-# (how large the UI is drawn); /scale-device is DeviceScaleFactor, which is
-# what the mouse pointer follows. Leaving device at 180 to match made the
-# cursor render huge, since Windows draws the pointer server-side at that
-# scale and the client never downsizes it. 100 keeps the UI at 180% while
-# giving a normal-sized cursor. Both are negotiated at connect time, so a
-# change needs a reconnect. Valid values are 100, 140 and 180 only.
+# /scale-device is DeviceScaleFactor. NOTE: this was tried as a fix for the
+# oversized mouse cursor and does NOT affect it -- FreeRDP's own help says it
+# is the "scaling factor for app store applications" (UWP/Store apps), not the
+# pointer. Kept only because it is the honest value for a 100% device scale.
+# Do not re-try it for the cursor. Valid values are 100, 140 and 180 only.
 SCALE_DEVICE="${RDP_SCALE_DEVICE:-100}"
+
+# /scale only accepts 100|140|180, and this panel runs at scale=2.0, so 180 is
+# merely the nearest step -- an approximation, not an exact match.
+# /scale-desktop takes any percentage 100-500, so RDP_SCALE_DESKTOP=200 gives a
+# true 2x. Untested as of 2026-08-24; set it to try, unset to keep /scale:180.
+SCALE_DESKTOP="${RDP_SCALE_DESKTOP:-}"
+
+# The session runs under XWayland by default. wlfreerdp3 is a native Wayland
+# client and is installed; RDP_CLIENT=wlfreerdp3 switches to it. This is the
+# other untried lead for the cursor problem.
+CLIENT="${RDP_CLIENT:-xfreerdp3}"
 
 # No VAAPI on Asahi -- hardware H.264 decode always fails and falls back to
 # software after a retry, so ask for software decode up front rather than
@@ -62,15 +71,17 @@ args=(
   /log-level:WARN
 )
 
+[ -n "$SCALE_DESKTOP" ] && args+=( /scale-desktop:"$SCALE_DESKTOP" )
+
 PW="$(secret-tool lookup service desktop-windows-rdp user "$USER_NAME" 2>/dev/null || true)"
 
 if [ -n "$PW" ]; then
   # force: read the credential up front rather than waiting for the server to
   # ask, so the pipe is consumed deterministically instead of racing the
   # connection handshake.
-  printf '%s\n' "$PW" | exec xfreerdp3 "${args[@]}" /from-stdin:force "$@"
+  printf '%s\n' "$PW" | exec "$CLIENT" "${args[@]}" /from-stdin:force "$@"
 else
   echo "desktop-windows-rdp: no keyring entry found, prompting." >&2
   echo "  store it with: secret-tool store --label=\"Desktop Windows VM (RDP)\" service desktop-windows-rdp user $USER_NAME" >&2
-  exec xfreerdp3 "${args[@]}" "$@"
+  exec "$CLIENT" "${args[@]}" "$@"
 fi
