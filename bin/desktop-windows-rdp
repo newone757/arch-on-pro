@@ -69,6 +69,13 @@ args=(
   +window-drag
   /compression-level:2
   /log-level:WARN
+  # Do not grab the keyboard. A native Wayland client (wlfreerdp3) uses the
+  # keyboard-shortcuts-inhibit protocol to take every key for the remote
+  # session, which swallows Hyprland binds -- SUPER+Q stops closing the
+  # window. XWayland clients cannot inhibit shortcuts, which is why
+  # xfreerdp3 never showed this. Escape hatch if a grab ever sticks:
+  # <Right CTRL> releases keyboard and mouse grab.
+  -grab-keyboard
 )
 
 [ -n "$SCALE_DESKTOP" ] && args+=( /scale-desktop:"$SCALE_DESKTOP" )
