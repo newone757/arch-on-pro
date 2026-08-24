@@ -23,17 +23,30 @@ set -uo pipefail
 ZRAM_UNIT="systemd-zram-setup@zram0.service"
 restored=0
 
+# zram-generator's own stop can fail with EBUSY and leave /dev/zram0 present
+# but half-torn-down; the next start then fails writing comp_algorithm on an
+# already-initialised device. Resetting the device clears that state. Safe
+# whenever nothing is swapping on it, which is the case after swapoff.
+reset_zram_device() {
+  [ -e /sys/block/zram0/reset ] || return 0
+  sudo sh -c 'echo 1 > /sys/block/zram0/reset' 2>/dev/null || true
+}
+
 restore_zram() {
   (( restored )) && return
   restored=1
   echo
   echo ":: restoring zram"
-  sudo systemctl start "$ZRAM_UNIT" || {
-    echo "!! FAILED to restart $ZRAM_UNIT -- you are running with NO SWAP." >&2
-    echo "!! Fix with: sudo systemctl start $ZRAM_UNIT" >&2
-    return 1
-  }
-  swapon --show
+  reset_zram_device
+  if sudo systemctl start "$ZRAM_UNIT" && awk 'NR > 1 { found=1 } END { exit !found }' /proc/swaps; then
+    swapon --show
+    return 0
+  fi
+  echo "!! FAILED to restart $ZRAM_UNIT -- you are running with NO SWAP." >&2
+  echo "!! Fix with:" >&2
+  echo "!!   sudo sh -c 'echo 1 > /sys/block/zram0/reset'" >&2
+  echo "!!   sudo systemctl start $ZRAM_UNIT" >&2
+  return 1
 }
 trap restore_zram EXIT INT TERM
 
@@ -48,7 +61,13 @@ swapon --show || echo "   (none)"
 
 echo
 echo ":: stopping zram"
-sudo systemctl stop "$ZRAM_UNIT" || { echo "!! could not stop $ZRAM_UNIT" >&2; exit 1; }
+# swapoff first: the unit's stop path is what fails with EBUSY, and taking the
+# device out of use ourselves makes both the stop and the later reset reliable.
+if swapon --show=NAME --noheadings 2>/dev/null | grep -qx /dev/zram0; then
+  sudo swapoff /dev/zram0 || { echo "!! could not swapoff /dev/zram0" >&2; exit 1; }
+fi
+sudo systemctl stop "$ZRAM_UNIT" 2>/dev/null || true
+reset_zram_device
 
 if awk 'NR > 1 { found=1 } END { exit !found }' /proc/swaps; then
   echo "!! swap is STILL active after stopping zram:" >&2
