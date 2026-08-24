@@ -42,9 +42,13 @@ SCALE_DEVICE="${RDP_SCALE_DEVICE:-100}"
 # true 2x. Untested as of 2026-08-24; set it to try, unset to keep /scale:180.
 SCALE_DESKTOP="${RDP_SCALE_DESKTOP:-}"
 
-# The session runs under XWayland by default. wlfreerdp3 is a native Wayland
-# client and is installed; RDP_CLIENT=wlfreerdp3 switches to it. This is the
-# other untried lead for the cursor problem.
+# The session runs under XWayland by default. RDP_CLIENT=wlfreerdp3 switches to
+# the native Wayland client -- TRIED 2026-08-24 AND REJECTED: even paired with
+# RDP_SCALE=100 (needed, since a Wayland client also gets the compositor's 2x)
+# the cursor was still oversized, the pointer itself did not render at all --
+# only a visual glitch tracking its position -- and the session showed heavy
+# artifacting. Strictly worse than xfreerdp3. Keep the knob for future retries
+# after a FreeRDP update, but do not reach for it as a cursor fix.
 CLIENT="${RDP_CLIENT:-xfreerdp3}"
 
 # No VAAPI on Asahi -- hardware H.264 decode always fails and falls back to
