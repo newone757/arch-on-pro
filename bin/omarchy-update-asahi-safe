@@ -1,0 +1,68 @@
+#!/bin/bash
+# Run `omarchy update` with zram temporarily disabled.
+#
+# omarchy-update-asahi-bundle refuses to run while any swap is active:
+#
+#   if [[ -r $(root_path /proc/swaps) ]] && awk 'NR > 1 ...'; then
+#     fail "swap or zram is active"
+#   fi
+#
+# The bundle update replaces the kernel, m1n1 and firmware, so it wants a
+# clean no-swap state. This machine runs 8G of zram (added to stop memory
+# pressure hard-freezing the compositor -- with no swap at all the kernel's
+# only reclaim target is page cache, including Hyprland's own pages), so
+# every bundle update trips that guard.
+#
+# Stop zram, update, put it back. The restore runs from an EXIT trap so zram
+# comes back even if the update fails or the script is interrupted.
+#
+# There is a matching zswap guard; zswap is off on this machine (N), so it is
+# only checked here rather than toggled.
+set -uo pipefail
+
+ZRAM_UNIT="systemd-zram-setup@zram0.service"
+restored=0
+
+restore_zram() {
+  (( restored )) && return
+  restored=1
+  echo
+  echo ":: restoring zram"
+  sudo systemctl start "$ZRAM_UNIT" || {
+    echo "!! FAILED to restart $ZRAM_UNIT -- you are running with NO SWAP." >&2
+    echo "!! Fix with: sudo systemctl start $ZRAM_UNIT" >&2
+    return 1
+  }
+  swapon --show
+}
+trap restore_zram EXIT INT TERM
+
+zswap_state=$(cat /sys/module/zswap/parameters/enabled 2>/dev/null || echo N)
+case "$zswap_state" in
+  N|0) ;;
+  *) echo "!! zswap is enabled ($zswap_state); the updater will refuse. Disable it first." >&2; exit 1 ;;
+esac
+
+echo ":: current swap"
+swapon --show || echo "   (none)"
+
+echo
+echo ":: stopping zram"
+sudo systemctl stop "$ZRAM_UNIT" || { echo "!! could not stop $ZRAM_UNIT" >&2; exit 1; }
+
+if awk 'NR > 1 { found=1 } END { exit !found }' /proc/swaps; then
+  echo "!! swap is STILL active after stopping zram:" >&2
+  swapon --show >&2
+  echo "!! the updater will refuse; disable the remaining swap first." >&2
+  exit 1
+fi
+echo "   swap is clear"
+
+echo
+echo ":: running omarchy update"
+omarchy update
+status=$?
+
+echo
+echo ":: update exited with status $status"
+exit $status
