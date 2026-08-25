@@ -32,7 +32,12 @@ Hardware / kernel / systemd / PipeWire level — untouched by the Quickshell rew
       `config/systemd/user/super-scroll-dispatch.service` + `config/hypr/scripts/*`
       (scroll-next-col, scroll-prev-col, super-j, browser-tab-*). Dispatches Hyprland
       actions, not shell. ⚠️ Re-check hardcoded `TRACKPAD_DEV=/dev/input/event4` after install.
-- [ ] ✅ **fn-key mode** — `etc/modprobe.d/hid_apple.conf` (fnmode=1).
+- [ ] ✅ **fn-key mode** — `etc/modprobe.d/hid_apple.conf` (fnmode=1). Initially marked done
+      on a live sysfs write only, and it reverted on the next reboot: Omarchy's
+      `apple_hid_modules.conf` loads `hid_apple` from the initramfs, so the stale baked-in
+      copy of `modprobe.d` won. Fixed 2026-08-25 with `sudo mkinitcpio -P` plus
+      `hid_apple.fnmode=1` on the GRUB cmdline. ⚠️ Live value correct; still to be confirmed
+      across a reboot.
 - [ ] ✅ **Hide macOS partitions** — `etc/udev/rules.d/99-hide-macos-partitions.rules`.
 - [ ] ✅ **Notch kernel flag** — `appledrm.show_notch=1` in GRUB. Applied and confirmed post-reboot. *Panel-alignment part redone in Tier C — see below, done.*
 - [ ] ✅ **fastfetch branding** — `config/fastfetch/config.jsonc`, `config/omarchy/branding/about.txt`.

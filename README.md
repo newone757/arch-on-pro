@@ -24,6 +24,7 @@ usr/share/asahi-audio/j316/
 etc/
 ├── modprobe.d/
 │   └── hid_apple.conf               # fnmode=1: media keys default, fn for F-keys
+│                                    #   (needs `mkinitcpio -P` — see Hardware notes)
 ├── modules-load.d/
 │   └── uinput.conf                  # Load uinput module at boot (required by titdb)
 ├── pacman.d/hooks/
@@ -100,9 +101,19 @@ Gestures handled by the daemon:
 
 **Super+copy/paste/cut fix** — after a Hyprland update, `sendshortcut` silently does nothing without an explicit `activewindow` target. Super+C/V/X are overridden in `bindings.conf` with the corrected syntax.
 
-**Function row fix** — by default on this hardware the function row acts as F1-F12, requiring `fn` for media/brightness/volume keys. `etc/modprobe.d/hid_apple.conf` sets `fnmode=1` to flip this. Copy it to `/etc/modprobe.d/` and apply live with `echo 1 | sudo tee /sys/module/hid_apple/parameters/fnmode`.
+**Function row fix** — by default on this hardware the function row acts as F1-F12, requiring `fn` for media/brightness/volume keys. `etc/modprobe.d/hid_apple.conf` sets `fnmode=1` to flip this (1 = `fkeyslast`, media primary; 2 = `fkeysfirst`, F-keys primary).
 
-**Notch support** — enables the full panel height including the notch area. Add `appledrm.show_notch=1` to `GRUB_CMDLINE_LINUX_DEFAULT` in `/etc/default/grub`, then run `sudo grub-mkconfig -o /boot/grub/grub.cfg` and reboot. The waybar height is set to 33px to align with the notch on the 16" display at 2x scaling.
+Copying the file is **not** enough to survive a reboot. Omarchy ships `/etc/mkinitcpio.conf.d/apple_hid_modules.conf`, which appends `hid_apple` to `MODULES=`, so the module loads inside the initramfs using the copy of `/etc/modprobe.d/` that was baked in at build time — a stale initramfs silently wins over the file on disk. Full install:
+
+```bash
+sudo cp etc/modprobe.d/hid_apple.conf /etc/modprobe.d/
+echo 1 | sudo tee /sys/module/hid_apple/parameters/fnmode   # apply live
+sudo mkinitcpio -P                                          # rebake into the initramfs
+```
+
+`hid_apple.fnmode=1` is also set on the kernel command line (see **Notch support** below for the `/etc/default/grub` workflow) as a backstop that applies at module-load time regardless of initramfs state. Because a cmdline param overrides `modprobe.d` for a module loaded this way, changing the fn behaviour later means editing the grub line, not just the conf file.
+
+**Notch support** — enables the full panel height including the notch area. Add `appledrm.show_notch=1` to `GRUB_CMDLINE_LINUX_DEFAULT` in `/etc/default/grub` (which also carries `hid_apple.fnmode=1`), then run `sudo grub-mkconfig -o /boot/grub/grub.cfg` and reboot. The waybar height is set to 33px to align with the notch on the 16" display at 2x scaling.
 
 **Hide macOS partitions from Nautilus** — `etc/udev/rules.d/99-hide-macos-partitions.rules` hides the APFS partitions (macOS system, data, recovery, and update volumes) from the Nautilus sidebar. Copy it to `/etc/udev/rules.d/` and apply with `sudo udevadm control --reload-rules && sudo udevadm trigger`. To unhide them, delete the file and reload: `sudo rm /etc/udev/rules.d/99-hide-macos-partitions.rules && sudo udevadm control --reload-rules && sudo udevadm trigger`.
 
