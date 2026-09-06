@@ -38,8 +38,22 @@ SCALE_DEVICE="${RDP_SCALE_DEVICE:-100}"
 
 # /scale only accepts 100|140|180, and this panel runs at scale=2.0, so 180 is
 # merely the nearest step -- an approximation, not an exact match.
-# /scale-desktop takes any percentage 100-500, so RDP_SCALE_DESKTOP=200 gives a
-# true 2x. Untested as of 2026-08-24; set it to try, unset to keep /scale:180.
+# /scale-desktop takes any percentage 100-500, so RDP_SCALE_DESKTOP=200 should
+# in principle give a true 2x -- TRIED 2026-09-05 AND REJECTED: no visible
+# effect at all, with or without RDP_SCALE=off to keep /scale from clobbering
+# DesktopScaleFactor. The guest simply ignores the hint. Do not re-try this as
+# a scaling fix.
+#
+# What actually fixed the too-small UI: setting display scaling to 200% inside
+# Windows itself (Settings > System > Display > Scale), then signing out and
+# back in -- the guest-side setting is what the desktop honors. That is a
+# change to the VM, not to this client, so it also applies to the 4K desktop
+# session the VM is normally used from; it was checked there and looks fine.
+# /scale:180 is left in place below as the client-side hint.
+#
+# Still outstanding after that fix: the oversized mouse cursor (FreeRDP #9687 --
+# with scaling on, everything scales except the cursor bitmap). Accepted as-is
+# rather than paying the sharpness cost of the /smart-sizing workaround below.
 SCALE_DESKTOP="${RDP_SCALE_DESKTOP:-}"
 
 # The session runs under XWayland by default. RDP_CLIENT=wlfreerdp3 switches to
@@ -68,7 +82,6 @@ SIZE="${RDP_SIZE:-}"
 # /d: is passed empty on purpose: this VM is a standalone workgroup machine,
 # not domain-joined, and without it FreeRDP stops to prompt for a domain.
 args=(
-  /v:"$HOST"
   /u:"$USER_NAME"
   /d:
   /cert:ignore
@@ -113,15 +126,166 @@ case "$SCALE_DEVICE" in
   *) args+=( /scale-device:"$SCALE_DEVICE" ) ;;
 esac
 
+
+# --- Reaching the VM's RDP port ------------------------------------------
+# Omarchy 4.0 publishes the container's ports on loopback only:
+#
+#     127.0.0.1:3389:3389/tcp   (and /udp)
+#
+# so $HOST:3389 is no longer reachable from this machine -- that is what broke
+# this script on the 4.0 upgrade, not the new polkit prompt. The binding is
+# hardcoded in the heredoc in omarchy-windows-vm's __priv_write_compose, not a
+# configurable field (that writer only accepts RAM/CORES/DISK/USERNAME/
+# PASSWORD/TZ/STORAGE/SHARED), so short of hand-editing the root-owned compose
+# -- which `omarchy-windows-vm install` would silently revert -- it stays.
+#
+# So tunnel rather than fight it: forward a local port to the desktop's own
+# 127.0.0.1:3389 over SSH and point FreeRDP at that. Needs no root on the
+# desktop, keeps Windows RDP off the LAN, and survives Omarchy rewriting the
+# compose again.
+#
+# Cost: ssh -L is TCP only, so RDP's optional UDP transport is gone. The
+# /gfx:AVC444 pipeline runs over the TCP channel regardless, so this is not a
+# picture-quality change.
+#
+# RDP_DIRECT=1 skips the tunnel and dials $HOST:3389 straight, for if the ports
+# are ever republished on all interfaces again.
+SSH_TARGET="${RDP_SSH_TARGET:-lonnie@$HOST}"
+
+# 4.0 also moved the compose out of $HOME into a root-owned directory: a
+# user-writable compose consumed by a root `docker compose up` was a file-swap
+# path to root, so the old ~/.config/windows/docker-compose.yml is gone (only
+# `credentials` and `krb5.conf` remain there).
+#
+# Only the sudoless-Docker fallback below reads this path directly; the
+# preferred route hands the file to omarchy-windows-vm's own root-side helper
+# and never needs to read it. It is 0640 root:docker, so the fallback works
+# only when the docker group is actually on.
+COMPOSE_FILE="${RDP_COMPOSE_FILE:-/var/lib/omarchy/windows/docker-compose.yml}"
+BOOT_TIMEOUT="${RDP_BOOT_TIMEOUT:-180}"
+
+if [ -n "${RDP_DIRECT:-}" ]; then
+  TARGET="$HOST:3389"
+  SSH_BASE=( ssh -o BatchMode=yes -o ConnectTimeout=8 "$SSH_TARGET" )
+  remote_port_open() {
+    timeout 3 bash -c "cat < /dev/null > /dev/tcp/$HOST/3389" 2>/dev/null
+  }
+else
+  # Take a free local port instead of a fixed one, so a leaked tunnel from a
+  # crashed run or a second concurrent session does not collide.
+  BASE_PORT="${RDP_LOCAL_PORT:-13389}"
+  LOCAL_PORT=""
+  for p in $(seq "$BASE_PORT" $((BASE_PORT + 20))); do
+    if ! ss -ltnH "sport = :$p" 2>/dev/null | grep -q .; then
+      LOCAL_PORT="$p"
+      break
+    fi
+  done
+  [ -n "$LOCAL_PORT" ] || {
+    echo "desktop-windows-rdp: no free local port near $BASE_PORT for the tunnel" >&2
+    exit 1
+  }
+
+  # One multiplexed connection carries both the port forward and the docker
+  # commands below, so the VM check and the RDP session share a single auth and
+  # a single TCP connection.
+  CTL="$(mktemp -u "${TMPDIR:-/tmp}/desktop-windows-rdp.XXXXXX")"
+  if ! ssh -f -N -M -S "$CTL" \
+        -o BatchMode=yes -o ConnectTimeout=8 -o ExitOnForwardFailure=yes \
+        -L "$LOCAL_PORT:127.0.0.1:3389" "$SSH_TARGET"; then
+    echo "desktop-windows-rdp: cannot SSH to $SSH_TARGET -- is the desktop powered on?" >&2
+    exit 1
+  fi
+  # Tear the tunnel down on the way out. This is also why the FreeRDP calls at
+  # the bottom are no longer exec'd: exec would replace this shell and lose the
+  # trap, leaking a background ssh per session.
+  trap 'ssh -S "$CTL" -O exit "$SSH_TARGET" >/dev/null 2>&1 || true' EXIT
+
+  TARGET="127.0.0.1:$LOCAL_PORT"
+  SSH_BASE=( ssh -S "$CTL" "$SSH_TARGET" )
+
+  # Probe the desktop's loopback, not ours. The forward accepts local
+  # connections whether or not anything answers on the far end, so probing
+  # $LOCAL_PORT here would always succeed and never notice a stopped VM.
+  remote_port_open() {
+    "${SSH_BASE[@]}" 'timeout 3 bash -c "cat < /dev/null > /dev/tcp/127.0.0.1/3389"' 2>/dev/null
+  }
+fi
+
+# --- Make sure the VM is actually up -------------------------------------
+# Nothing listens on 3389 while the "omarchy-windows" container is down, and
+# the desktop's own `omarchy-windows-vm launch` defaults to auto-stopping the
+# VM when its RDP session closes -- so a normal evening's disconnect leaves
+# this shortcut with no server to talk to, which looks exactly like the VM
+# having been "signed out".
+#
+# Start it through omarchy-windows-vm's own privileged action rather than
+# poking docker-compose directly. Three reasons:
+#
+#   1. `__priv up_wait` runs assert_mounts_safe first, which refuses to start
+#      if ~/.windows or ~/Windows is a symlink or resolves through one. We own
+#      those directories, so without that check a planted symlink would
+#      redirect a *root* bind-mount -- host / included -- into the guest.
+#      Calling docker-compose ourselves silently skips that guard.
+#   2. It brings the VM up and waits for the guest's own "windows started
+#      successfully" under a single elevation, so there is no per-iteration
+#      re-auth and no polling docker logs from here.
+#   3. It needs no general Docker access, so this works with a sudoers rule
+#      scoped to three exact argv lines instead of the docker group -- which
+#      is root-equivalent (`docker run -v /:/host alpine`). See README.
+#
+# Not `omarchy-windows-vm launch`: that starts the VM *and* opens its own RDP
+# client on the desktop, which is not what is wanted from here.
+# Set RDP_NO_AUTOSTART=1 to skip all of this and fail fast instead.
+PRIV_CMD="${RDP_PRIV_CMD:-/usr/bin/omarchy-windows-vm}"
+
+if [ -z "${RDP_NO_AUTOSTART:-}" ] && ! remote_port_open; then
+  echo "desktop-windows-rdp: no RDP on the desktop -- starting the Windows VM..." >&2
+
+  if ! "${SSH_BASE[@]}" true 2>/dev/null; then
+    echo "desktop-windows-rdp: cannot SSH to $SSH_TARGET -- is the desktop powered on?" >&2
+    exit 1
+  fi
+
+  command -v notify-send >/dev/null && \
+    notify-send "Windows VM" "Booting on the desktop -- this takes 30-60s" -t 15000 || true
+
+  echo "desktop-windows-rdp: waiting for Windows to boot (up to ${BOOT_TIMEOUT}s)..." >&2
+
+  # Preferred path: the scoped NOPASSWD sudoers rule. -n so it fails fast
+  # instead of hanging on a password prompt that has no TTY to read from.
+  # Fallback: sudoless Docker is enabled, so the socket is directly reachable
+  # and docker-compose works as us -- weaker (no mount guard), but if the
+  # docker group is on, the guard was not protecting anything anyway.
+  if ! "${SSH_BASE[@]}" "timeout $BOOT_TIMEOUT sudo -n '$PRIV_CMD' __priv up_wait" >&2; then
+    echo "desktop-windows-rdp: scoped sudo path unavailable, trying direct Docker..." >&2
+    if ! "${SSH_BASE[@]}" "id -nG | grep -qw docker && timeout $BOOT_TIMEOUT docker-compose -f '$COMPOSE_FILE' up -d" >&2; then
+      echo "desktop-windows-rdp: could not start the Windows VM." >&2
+      echo "  Omarchy 4.0 keeps you out of the docker group by default and gates" >&2
+      echo "  Docker behind a polkit prompt, which cannot be answered over SSH." >&2
+      echo "  Grant the narrow rule instead (preferred over the docker group):" >&2
+      echo "    sudo tee /etc/sudoers.d/omarchy-windows-vm  # see README" >&2
+      echo "    lonnie ALL=(root) NOPASSWD: $PRIV_CMD __priv up_wait, \\" >&2
+      echo "                                $PRIV_CMD __priv status, \\" >&2
+      echo "                                $PRIV_CMD __priv down" >&2
+      echo "  then validate: sudo visudo -c -f /etc/sudoers.d/omarchy-windows-vm" >&2
+      exit 1
+    fi
+  fi
+
+  # up_wait returns on the guest's ready line, but the RDP service inside
+  # Windows lags that slightly.
+  for _ in 1 2 3 4 5 6 7 8 9 10; do remote_port_open && break; sleep 2; done
+fi
 PW="$(secret-tool lookup service desktop-windows-rdp user "$USER_NAME" 2>/dev/null || true)"
 
 if [ -n "$PW" ]; then
   # force: read the credential up front rather than waiting for the server to
   # ask, so the pipe is consumed deterministically instead of racing the
   # connection handshake.
-  printf '%s\n' "$PW" | exec "$CLIENT" "${args[@]}" /from-stdin:force "$@"
+  printf '%s\n' "$PW" | "$CLIENT" /v:"$TARGET" "${args[@]}" /from-stdin:force "$@"
 else
   echo "desktop-windows-rdp: no keyring entry found, prompting." >&2
   echo "  store it with: secret-tool store --label=\"Desktop Windows VM (RDP)\" service desktop-windows-rdp user $USER_NAME" >&2
-  exec "$CLIENT" "${args[@]}" "$@"
+  "$CLIENT" /v:"$TARGET" "${args[@]}" "$@"
 fi

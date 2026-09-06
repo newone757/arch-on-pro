@@ -217,6 +217,53 @@ Installs `iio-sensor-proxy`, drops the script into `~/.local/bin/`, and enables 
 
 Installs `titdb-git` from AUR, sets up the `uinput` group and udev rule, loads the `uinput` kernel module at boot, and enables the `titdb` systemd service. Runs in flex mode with left/right edges dead-zoned 10% and bottom 15%. To tune: edit `/etc/systemd/system/titdb.service.d/override.conf` and run `sudo systemctl restart titdb`.
 
+**Desktop Windows VM over RDP** — `bin/desktop-windows-rdp`. Broke on the desktop's Omarchy 3.5.1 → 4.0
+upgrade; three separate causes, all fixed in the script:
+
+1. **Ports moved to loopback.** 4.0 publishes the container as `127.0.0.1:3389:3389`, so `DESKTOP_IP:3389`
+   is no longer reachable from this machine. It is not configurable — the binding is a literal in the
+   heredoc in `omarchy-windows-vm`'s `__priv_write_compose`, which only accepts
+   `RAM/CORES/DISK/USERNAME/PASSWORD/TZ/STORAGE/SHARED`. The script now forwards a free local port to the
+   desktop's own `127.0.0.1:3389` over SSH instead of hand-editing the root-owned compose (which
+   `omarchy-windows-vm install` would silently revert). `RDP_DIRECT=1` restores the old direct dial.
+   Cost: `ssh -L` is TCP-only, so RDP's optional UDP transport is gone; `/gfx:AVC444` runs over TCP
+   regardless, so picture quality is unchanged.
+2. **The compose moved.** `~/.config/windows/docker-compose.yml` → `/var/lib/omarchy/windows/docker-compose.yml`,
+   `0640 root:docker`. Deliberate: a user-writable compose consumed by a root `docker compose up` was a
+   file-swap path to root. Only `credentials` and `krb5.conf` remain in `~/.config/windows/`.
+3. **The user is no longer in the `docker` group.** 4.0 leaves it empty by default and gates Docker behind
+   a polkit prompt — which is why launching the VM (and the Docker TUI) now asks for a password on the
+   desktop, and why autostart over SSH fails: `pkexec` needs an interactive polkit agent on the desktop's
+   own session and cannot be answered remotely.
+
+For (3), **do not** use `omarchy-setup-security-sudoless-docker`. It works, but the `docker` group is
+root-equivalent — anything running as you can then `docker run -v /:/host alpine` and own the machine with
+no prompt. Grant a scoped sudoers rule on the desktop instead:
+
+```bash
+sudo install -m 0440 /dev/null /etc/sudoers.d/omarchy-windows-vm
+sudo tee /etc/sudoers.d/omarchy-windows-vm >/dev/null <<'EOF'
+lonnie ALL=(root) NOPASSWD: /usr/bin/omarchy-windows-vm __priv up_wait, \
+                            /usr/bin/omarchy-windows-vm __priv status, \
+                            /usr/bin/omarchy-windows-vm __priv down
+EOF
+sudo visudo -c -f /etc/sudoers.d/omarchy-windows-vm   # must print "parsed OK", else delete the file
+```
+
+Three exact argv lines, no wildcards. It grants start/stop/status of that one container and nothing else —
+notably **not** `__priv write_compose` (so the compose stays root-owned and its bind mounts cannot be
+repointed) and **not** `__priv remove`. `sudo docker` still prompts.
+
+The script calls `__priv up_wait` rather than `docker-compose up -d` on purpose: `up_wait` runs
+`assert_mounts_safe` as root first, which refuses to start if `~/.windows` or `~/Windows` is a symlink or
+resolves through one. We own those directories, so without that guard a planted symlink would redirect a
+*root* bind-mount — host `/` included — into the guest. It also waits for the guest's own "windows started
+successfully" line under the same single elevation. A sudoless-Docker fallback is kept for the case where
+the group is enabled anyway.
+
+Don't extend the same treatment to `lazydocker` (Super + Shift + D): a passwordless-root lazydocker can
+launch arbitrary containers, so it is the docker group with extra steps. That prompt should stay.
+
 **Windows 11 ARM VM** (dockurr/windows via Docker, connects over RDP) — **NOT IN USE.**
 Superseded by remoting into the desktop PC's existing Windows VM, which is far better hardware for it
 (see `bin/desktop-windows-rdp`). The launcher `windows-vm.desktop` was removed from this repo so a fresh
