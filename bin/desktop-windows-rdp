@@ -41,15 +41,32 @@ SCALE_DEVICE="${RDP_SCALE_DEVICE:-100}"
 # /scale-desktop takes any percentage 100-500, so RDP_SCALE_DESKTOP=200 should
 # in principle give a true 2x -- TRIED 2026-09-05 AND REJECTED: no visible
 # effect at all, with or without RDP_SCALE=off to keep /scale from clobbering
-# DesktopScaleFactor. The guest simply ignores the hint. Do not re-try this as
-# a scaling fix.
+# DesktopScaleFactor.
 #
-# What actually fixed the too-small UI: setting display scaling to 200% inside
-# Windows itself (Settings > System > Display > Scale), then signing out and
-# back in -- the guest-side setting is what the desktop honors. That is a
-# change to the VM, not to this client, so it also applies to the 4K desktop
-# session the VM is normally used from; it was checked there and looks fine.
-# /scale:180 is left in place below as the client-side hint.
+# 2026-09-07 -- THAT RESULT WAS CONFOUNDED, treat it as unproven rather than
+# settled. The 2026-09-05 test ran while Windows' own display scaling was
+# pinned at 200%. The guest-side setting wins outright, so any client-side
+# hint was being masked and "no visible effect" was the expected outcome
+# either way -- the test could not have detected a working /scale-desktop.
+#
+# The guest has since been reset to 100% (see below), and on the 4K desktop
+# client-side scaling was then confirmed to work: /scale-desktop:140 was
+# visibly larger, 100 was native. So the mechanism does function against this
+# VM. Whether it works from *this* machine is untested under the new
+# conditions -- Asahi/ARM with /gdi:sw is a different FreeRDP build, and the
+# session comes in over the SSH tunnel. Re-test before concluding anything.
+#
+# What fixed the too-small UI at the time: setting display scaling to 200%
+# inside Windows itself (Settings > System > Display > Scale), then signing
+# out and back in. That was a change to the VM, not to this client, so it
+# followed the VM everywhere -- including the 4K desktop session, where it
+# then rendered everything oversized. For that reason it was REVERTED to 100%
+# on 2026-09-07: guest-side scaling is the wrong layer for a VM used from two
+# displays with different DPI. Set scaling per client instead.
+#
+# Practical upshot for this script: SCALE defaults to 180, so /scale:180 is
+# already being sent and should now actually take effect with the guest at
+# 100%. Try it as-is first; only reach for RDP_SCALE_DESKTOP if 180 is wrong.
 #
 # Still outstanding after that fix: the oversized mouse cursor (FreeRDP #9687 --
 # with scaling on, everything scales except the cursor bitmap). Accepted as-is
@@ -213,11 +230,19 @@ else
 fi
 
 # --- Make sure the VM is actually up -------------------------------------
-# Nothing listens on 3389 while the "omarchy-windows" container is down, and
-# the desktop's own `omarchy-windows-vm launch` defaults to auto-stopping the
-# VM when its RDP session closes -- so a normal evening's disconnect leaves
-# this shortcut with no server to talk to, which looks exactly like the VM
-# having been "signed out".
+# Nothing listens on 3389 while the "omarchy-windows" container is down.
+#
+# Stock `omarchy-windows-vm launch` auto-stops the VM when its RDP session
+# closes, so a normal evening's disconnect on the desktop used to leave this
+# shortcut with no server to talk to -- which looked exactly like the VM
+# having been "signed out". As of 2026-09-07 the desktop no longer runs the
+# stock launcher: its shortcut points at ~/.local/bin/omarchy-windows-vm-launch,
+# which leaves the VM running on window close (the VM is shut down from inside
+# Windows instead). So the container is far more likely to be up already and
+# the autostart path below to be a no-op.
+#
+# Keep the autostart anyway: it still covers a genuinely powered-off VM, a
+# rebooted desktop, and a desktop session that used --stop-on-exit.
 #
 # Start it through omarchy-windows-vm's own privileged action rather than
 # poking docker-compose directly. Three reasons:
