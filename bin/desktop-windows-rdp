@@ -237,7 +237,14 @@ fi
 # Not `omarchy-windows-vm launch`: that starts the VM *and* opens its own RDP
 # client on the desktop, which is not what is wanted from here.
 # Set RDP_NO_AUTOSTART=1 to skip all of this and fail fast instead.
-PRIV_CMD="${RDP_PRIV_CMD:-/usr/bin/omarchy-windows-vm}"
+#
+# Since Omarchy 4.0.4 the root side of `__priv` identifies its caller only
+# through PKEXEC_UID, so `sudo omarchy-windows-vm __priv up_wait` fails with
+# "cannot identify the user who authorized this action". The desktop has a
+# root-owned shim that passes sudo's own SUDO_UID through as PKEXEC_UID and
+# allows only up_wait/status/down (2026-10-25; source in the desktop's
+# ~/notes/windows-vm-shim). Call that instead of the raw binary.
+PRIV_CMD="${RDP_PRIV_CMD:-/usr/local/libexec/omarchy-windows-vm-priv}"
 
 if [ -z "${RDP_NO_AUTOSTART:-}" ] && ! remote_port_open; then
   echo "desktop-windows-rdp: no RDP on the desktop -- starting the Windows VM..." >&2
@@ -257,18 +264,18 @@ if [ -z "${RDP_NO_AUTOSTART:-}" ] && ! remote_port_open; then
   # Fallback: sudoless Docker is enabled, so the socket is directly reachable
   # and docker-compose works as us -- weaker (no mount guard), but if the
   # docker group is on, the guard was not protecting anything anyway.
-  if ! "${SSH_BASE[@]}" "timeout $BOOT_TIMEOUT sudo -n '$PRIV_CMD' __priv up_wait" >&2; then
+  if ! "${SSH_BASE[@]}" "timeout $BOOT_TIMEOUT sudo -n '$PRIV_CMD' up_wait" >&2; then
     echo "desktop-windows-rdp: scoped sudo path unavailable, trying direct Docker..." >&2
     if ! "${SSH_BASE[@]}" "id -nG | grep -qw docker && timeout $BOOT_TIMEOUT docker-compose -f '$COMPOSE_FILE' up -d" >&2; then
       echo "desktop-windows-rdp: could not start the Windows VM." >&2
       echo "  Omarchy 4.0 keeps you out of the docker group by default and gates" >&2
       echo "  Docker behind a polkit prompt, which cannot be answered over SSH." >&2
       echo "  Grant the narrow rule instead (preferred over the docker group):" >&2
-      echo "    sudo tee /etc/sudoers.d/omarchy-windows-vm  # see README" >&2
-      echo "    lonnie ALL=(root) NOPASSWD: $PRIV_CMD __priv up_wait, \\" >&2
-      echo "                                $PRIV_CMD __priv status, \\" >&2
-      echo "                                $PRIV_CMD __priv down" >&2
-      echo "  then validate: sudo visudo -c -f /etc/sudoers.d/omarchy-windows-vm" >&2
+      echo "  Install the shim and its rule on the desktop (see README):" >&2
+      echo "    lonnie ALL=(root) NOPASSWD: $PRIV_CMD up_wait, \\" >&2
+      echo "                                $PRIV_CMD status, \\" >&2
+      echo "                                $PRIV_CMD down" >&2
+      echo "  in /etc/sudoers.d/omarchy-windows-vm-shim, then: sudo visudo -c" >&2
       exit 1
     fi
   fi

@@ -240,14 +240,22 @@ For (3), **do not** use `omarchy-setup-security-sudoless-docker`. It works, but 
 root-equivalent — anything running as you can then `docker run -v /:/host alpine` and own the machine with
 no prompt. Grant a scoped sudoers rule on the desktop instead:
 
+Since Omarchy 4.0.4, `__priv` only accepts a caller identified by `PKEXEC_UID`, so a rule that runs
+`/usr/bin/omarchy-windows-vm __priv …` directly through sudo fails with "cannot identify the user who
+authorized this action". The rule therefore points at a small root-owned shim on the desktop,
+`/usr/local/libexec/omarchy-windows-vm-priv`, which allows only `up_wait`, `status` and `down`, checks
+that sudo set `SUDO_UID`, and runs `PKEXEC_UID=$SUDO_UID /usr/bin/omarchy-windows-vm __priv <action>`.
+`SUDO_UID` comes from sudo itself and the caller cannot set it, so every upstream ownership check still
+runs against your own account. (Keeping `PKEXEC_UID` through sudo with `env_keep` would let the caller
+choose any UID: don't.) The shim must be root-owned in a root-owned directory, or it is a root shell.
+
 ```bash
-sudo install -m 0440 /dev/null /etc/sudoers.d/omarchy-windows-vm
-sudo tee /etc/sudoers.d/omarchy-windows-vm >/dev/null <<'EOF'
-lonnie ALL=(root) NOPASSWD: /usr/bin/omarchy-windows-vm __priv up_wait, \
-                            /usr/bin/omarchy-windows-vm __priv status, \
-                            /usr/bin/omarchy-windows-vm __priv down
+sudo install -o root -g root -m 0755 -D omarchy-windows-vm-priv /usr/local/libexec/omarchy-windows-vm-priv
+sudo tee /etc/sudoers.d/omarchy-windows-vm-shim >/dev/null <<'EOF'
+lonnie ALL=(root) NOPASSWD: /usr/local/libexec/omarchy-windows-vm-priv up_wait, /usr/local/libexec/omarchy-windows-vm-priv status, /usr/local/libexec/omarchy-windows-vm-priv down
 EOF
-sudo visudo -c -f /etc/sudoers.d/omarchy-windows-vm   # must print "parsed OK", else delete the file
+sudo chmod 0440 /etc/sudoers.d/omarchy-windows-vm-shim
+sudo visudo -c   # must print "parsed OK", else delete the file
 ```
 
 Three exact argv lines, no wildcards. It grants start/stop/status of that one container and nothing else —
