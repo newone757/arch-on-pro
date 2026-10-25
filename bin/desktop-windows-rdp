@@ -1,8 +1,9 @@
 #!/bin/bash
 # RDP into the Windows 11 VM running on the desktop.
 #
-# Host is a placeholder -- this repo is public. Set RDP_HOST/RDP_USER,
-# or edit the defaults below after restoring.
+# Hosts are placeholders -- this repo is public. Set RDP_HOST_FIBER/
+# RDP_HOST_WIFI (or RDP_HOST to pin one) and RDP_USER, or edit the defaults
+# below after restoring.
 #
 # That VM is x86_64 with 16G/8-cores, so it runs Lightroom Classic and
 # Capture One natively -- unlike a local ARM VM on this MacBook, where
@@ -21,7 +22,46 @@
 #   secret-tool clear service desktop-windows-rdp user lonnie
 set -euo pipefail
 
-HOST="${RDP_HOST:-DESKTOP_IP}"
+# --- Which of the desktop's two addresses to dial -------------------------
+# The desktop keeps two live interfaces on the same /24: a 10G fiber NIC and
+# wifi. Everything below rides the
+# SSH tunnel, so whichever address ssh dials decides the whole path. The wifi
+# address was hardcoded here in Aug 2026 only because the fiber switch was dead
+# at the time; that was never the intended target.
+#
+# Prefer fiber. This laptop is itself wifi-only, so the gain is not the
+# desktop's 10G as such -- it is dropping from two wireless hops (laptop -> AP
+# -> desktop's wifi) to one (laptop -> AP -> wired desktop), which stops the AP
+# relaying between two of its own clients. Measured 2026-09-10: 4.51 ms avg /
+# 0.53 ms mdev to fiber against 6.48 ms / 1.80 ms to wifi. The jitter is the half
+# that shows up as a laggy session.
+#
+# Fall back to wifi when fiber does not answer, so a downed 10G link or a card
+# pulled for maintenance degrades instead of breaking the shortcut. RDP_HOST
+# still pins one explicitly and skips the probe entirely.
+HOST_FIBER="${RDP_HOST_FIBER:-DESKTOP_FIBER_IP}"
+HOST_WIFI="${RDP_HOST_WIFI:-DESKTOP_WIFI_IP}"
+HOST_PROBE_TIMEOUT="${RDP_HOST_PROBE_TIMEOUT:-2}"
+
+# Probe 22 rather than 3389: the VM is usually down at this point, so 3389
+# says nothing about which interface is up. Bash's /dev/tcp avoids depending
+# on nc, which is not installed here.
+probe_ssh() {
+  timeout "$HOST_PROBE_TIMEOUT" \
+    bash -c "cat < /dev/null > /dev/tcp/$1/22" 2>/dev/null
+}
+
+if [ -n "${RDP_HOST:-}" ]; then
+  HOST="$RDP_HOST"
+elif probe_ssh "$HOST_FIBER"; then
+  HOST="$HOST_FIBER"
+elif probe_ssh "$HOST_WIFI"; then
+  HOST="$HOST_WIFI"
+  echo "desktop-windows-rdp: fiber ($HOST_FIBER) did not answer; falling back to wifi ($HOST_WIFI)" >&2
+else
+  echo "desktop-windows-rdp: desktop answered on neither $HOST_FIBER nor $HOST_WIFI -- is it powered on?" >&2
+  exit 1
+fi
 USER_NAME="${RDP_USER:-lonnie}"
 
 # HiDPI: this panel is 3456x2234 at 2x scale, so without /scale the Windows
