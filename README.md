@@ -238,29 +238,24 @@ upgrade; three separate causes, all fixed in the script:
 
 For (3), **do not** use `omarchy-setup-security-sudoless-docker`. It works, but the `docker` group is
 root-equivalent — anything running as you can then `docker run -v /:/host alpine` and own the machine with
-no prompt. Grant a scoped sudoers rule on the desktop instead:
-
-Since Omarchy 4.0.4, `__priv` only accepts a caller identified by `PKEXEC_UID`, so a rule that runs
-`/usr/bin/omarchy-windows-vm __priv …` directly through sudo fails with "cannot identify the user who
-authorized this action". The rule therefore points at a small root-owned shim on the desktop,
-`/usr/local/libexec/omarchy-windows-vm-priv`, which allows only `up_wait`, `status` and `down`, checks
-that sudo set `SUDO_UID`, and runs `PKEXEC_UID=$SUDO_UID /usr/bin/omarchy-windows-vm __priv <action>`.
-`SUDO_UID` comes from sudo itself and the caller cannot set it, so every upstream ownership check still
-runs against your own account. (Keeping `PKEXEC_UID` through sudo with `env_keep` would let the caller
-choose any UID: don't.) The shim must be root-owned in a root-owned directory, or it is a root shell.
+no prompt. The desktop has a scoped polkit rule instead (2026-11-02, in the desktop dotfiles at
+`system/desktop/etc/polkit-1/rules.d/49-omarchy-windows-vm.rules`). It allows exactly
+`pkexec /usr/bin/omarchy-windows-vm __priv up_wait|status|down` for `lonnie`, with no prompt and no
+session check, so it should also answer over SSH (not yet tested from here). Since Omarchy 4.0.4
+`__priv` identifies its caller only through `PKEXEC_UID`, which pkexec sets itself, so the stock
+ownership checks still run against your own account. Check it from here:
 
 ```bash
-sudo install -o root -g root -m 0755 -D omarchy-windows-vm-priv /usr/local/libexec/omarchy-windows-vm-priv
-sudo tee /etc/sudoers.d/omarchy-windows-vm-shim >/dev/null <<'EOF'
-lonnie ALL=(root) NOPASSWD: /usr/local/libexec/omarchy-windows-vm-priv up_wait, /usr/local/libexec/omarchy-windows-vm-priv status, /usr/local/libexec/omarchy-windows-vm-priv down
-EOF
-sudo chmod 0440 /etc/sudoers.d/omarchy-windows-vm-shim
-sudo visudo -c   # must print "parsed OK", else delete the file
+ssh lonnie@DESKTOP_IP pkexec /usr/bin/omarchy-windows-vm __priv status   # prints running/stopped, no prompt
 ```
 
-Three exact argv lines, no wildcards. It grants start/stop/status of that one container and nothing else —
-notably **not** `__priv write_compose` (so the compose stays root-owned and its bind mounts cannot be
-repointed) and **not** `__priv remove`. `sudo docker` still prompts.
+Three exact command lines, no wildcards. It grants start/stop/status of that one container and nothing
+else — notably **not** `__priv write_compose` (so the compose stays root-owned and its bind mounts cannot
+be repointed) and **not** `__priv remove`. `sudo docker` still prompts.
+
+It replaces the earlier sudo shim (`/usr/local/libexec/omarchy-windows-vm-priv` plus
+`/etc/sudoers.d/omarchy-windows-vm-shim`), which did not survive the desktop's reinstall.
+To use a shim again, set `RDP_PRIV_CMD="sudo -n /usr/local/libexec/omarchy-windows-vm-priv"`.
 
 The script calls `__priv up_wait` rather than `docker-compose up -d` on purpose: `up_wait` runs
 `assert_mounts_safe` as root first, which refuses to start if `~/.windows` or `~/Windows` is a symlink or

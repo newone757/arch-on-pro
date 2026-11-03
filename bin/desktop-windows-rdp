@@ -304,12 +304,14 @@ fi
 # Set RDP_NO_AUTOSTART=1 to skip all of this and fail fast instead.
 #
 # Since Omarchy 4.0.4 the root side of `__priv` identifies its caller only
-# through PKEXEC_UID, so `sudo omarchy-windows-vm __priv up_wait` fails with
-# "cannot identify the user who authorized this action". The desktop has a
-# root-owned shim that passes sudo's own SUDO_UID through as PKEXEC_UID and
-# allows only up_wait/status/down (2026-10-25; source in the desktop's
-# ~/notes/windows-vm-shim). Call that instead of the raw binary.
-PRIV_CMD="${RDP_PRIV_CMD:-/usr/local/libexec/omarchy-windows-vm-priv}"
+# through PKEXEC_UID, so it has to be reached through pkexec. The desktop has a
+# polkit rule (desktop dotfiles: system/desktop/etc/polkit-1/rules.d/
+# 49-omarchy-windows-vm.rules, 2026-11-02) that allows exactly
+# `pkexec /usr/bin/omarchy-windows-vm __priv up_wait|status|down` for lonnie
+# with no prompt and no session check, so it also works over SSH. It replaced
+# the earlier sudo shim (/usr/local/libexec/omarchy-windows-vm-priv), which is
+# gone since the desktop's reinstall.
+PRIV_CMD="${RDP_PRIV_CMD:-pkexec /usr/bin/omarchy-windows-vm __priv}"
 
 if [ -z "${RDP_NO_AUTOSTART:-}" ] && ! remote_port_open; then
   echo "desktop-windows-rdp: no RDP on the desktop -- starting the Windows VM..." >&2
@@ -324,23 +326,19 @@ if [ -z "${RDP_NO_AUTOSTART:-}" ] && ! remote_port_open; then
 
   echo "desktop-windows-rdp: waiting for Windows to boot (up to ${BOOT_TIMEOUT}s)..." >&2
 
-  # Preferred path: the scoped NOPASSWD sudoers rule. -n so it fails fast
-  # instead of hanging on a password prompt that has no TTY to read from.
+  # Preferred path: the polkit rule above. If the rule is missing, pkexec has
+  # no agent to ask over SSH and should fail rather than hang (not yet tested).
   # Fallback: sudoless Docker is enabled, so the socket is directly reachable
   # and docker-compose works as us -- weaker (no mount guard), but if the
   # docker group is on, the guard was not protecting anything anyway.
-  if ! "${SSH_BASE[@]}" "timeout $BOOT_TIMEOUT sudo -n '$PRIV_CMD' up_wait" >&2; then
-    echo "desktop-windows-rdp: scoped sudo path unavailable, trying direct Docker..." >&2
+  if ! "${SSH_BASE[@]}" "timeout $BOOT_TIMEOUT $PRIV_CMD up_wait" >&2; then
+    echo "desktop-windows-rdp: pkexec path unavailable, trying direct Docker..." >&2
     if ! "${SSH_BASE[@]}" "id -nG | grep -qw docker && timeout $BOOT_TIMEOUT docker-compose -f '$COMPOSE_FILE' up -d" >&2; then
       echo "desktop-windows-rdp: could not start the Windows VM." >&2
       echo "  Omarchy 4.0 keeps you out of the docker group by default and gates" >&2
       echo "  Docker behind a polkit prompt, which cannot be answered over SSH." >&2
-      echo "  Grant the narrow rule instead (preferred over the docker group):" >&2
-      echo "  Install the shim and its rule on the desktop (see README):" >&2
-      echo "    lonnie ALL=(root) NOPASSWD: $PRIV_CMD up_wait, \\" >&2
-      echo "                                $PRIV_CMD status, \\" >&2
-      echo "                                $PRIV_CMD down" >&2
-      echo "  in /etc/sudoers.d/omarchy-windows-vm-shim, then: sudo visudo -c" >&2
+      echo "  Install the desktop's polkit rule (49-omarchy-windows-vm.rules in the" >&2
+      echo "  desktop dotfiles) instead of joining the docker group." >&2
       exit 1
     fi
   fi
