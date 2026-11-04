@@ -24,9 +24,18 @@ o.window("Aether", { scroll_touchpad = 0.4 })
 -- super-scroll-dispatch daemon — see autostart.lua).
 hl.gesture({ fingers = 4, direction = "horizontal", action = "workspace" })
 
+-- 4-finger vertical: scroll_move — drags the scrolling layout's columns with
+-- the fingers niri-style, snapping to a column on release. Only does anything
+-- on workspaces using the scrolling layout (Super+L). Vertical rather than
+-- horizontal so left/right stays workspace switching, matching the bar.
+-- scale multiplies how far the columns travel per finger distance (1 = 1:1).
+hl.gesture({ fingers = 4, direction = "vertical", action = "scroll_move", scale = 2.5 })
+
+-- 4-finger pinch in/out: summon/hide Mirador (moved off up/down; a 4-finger
+-- tap isn't possible — libinput only does 1–3 finger taps).
 hl.gesture({
   fingers = 4,
-  direction = "up",
+  direction = "pinchin",
   action = function()
     hl.dispatch(hl.dsp.exec_cmd("omarchy-shell shell summon mirador '{}'"))
   end,
@@ -34,7 +43,7 @@ hl.gesture({
 
 hl.gesture({
   fingers = 4,
-  direction = "down",
+  direction = "pinchout",
   action = function()
     hl.dispatch(hl.dsp.exec_cmd("omarchy-shell shell hide mirador"))
   end,
