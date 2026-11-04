@@ -7,3 +7,7 @@
 # logical at 2x scale, but that read visibly too tall against the actual
 # cutout. Tuned by eye instead: 32 is the value the user confirmed as flush.
 size-horizontal = 32
+
+# Velora-only popup alpha (0.70) lives in
+# ~/.config/omarchy/hooks/theme-set.d/velora-glass, not here: anything in
+# this file applies to every theme, and other themes keep solid popups.

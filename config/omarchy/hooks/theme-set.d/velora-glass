@@ -1,0 +1,37 @@
+#!/bin/bash
+# Velora: give foot and the bar popups the glass look, Velora only.
+#
+# The bar is Velora's background (#1a1b1e) at 52% with Hyprland blur behind
+# it. Foot's `alpha` makes only the terminal *background* translucent — text
+# stays fully opaque — so setting it to the bar's value and keeping the window
+# itself at full opacity (see ~/.config/hypr/theme-looks/velora.lua) matches
+# the bar. Foot also has to ask for blur itself (`blur=yes`, via the
+# ext-background-effect protocol): without it Hyprland leaves foot's
+# background unblurred and the wallpaper shows through sharp.
+#
+# Velora is installed from git, so it can't ship foot.ini itself; this
+# patches the generated one. Other themes are left solid, since only Velora
+# turns on blur. Applies to new foot windows (foot reads config at launch).
+
+THEME_NAME="$1"
+FOOT_THEME="$HOME/.local/state/omarchy/current/theme/foot.ini"
+ALPHA="0.52" # keep in sync with [bar] background-alpha in Velora's shell.toml
+
+[[ $THEME_NAME == "velora" && -f $FOOT_THEME ]] || exit 0
+
+# Generated file has a single [colors-dark] section; add keys to it once.
+grep -q '^blur=' "$FOOT_THEME" || sed -i "/^\[colors-dark\]/a blur=yes" "$FOOT_THEME"
+grep -q '^alpha=' "$FOOT_THEME" || sed -i "/^\[colors-dark\]/a alpha=$ALPHA" "$FOOT_THEME"
+
+# Bar popups / tray menus: a bit more tint than Velora's 0.52 so their small
+# text stays readable. Set on the active theme's shell.toml (not the user
+# ~/.config/omarchy/shell.toml) so other themes keep their own solid popups.
+SHELL_THEME="$HOME/.local/state/omarchy/current/theme/shell.toml"
+POPUP_ALPHA="0.70"
+if [[ -f $SHELL_THEME ]]; then
+  awk -v a="$POPUP_ALPHA" '
+    /^\[/ { in_popups = ($0 ~ /^\[popups\]/) }
+    in_popups && /^background-alpha[[:space:]]*=/ { print "background-alpha = " a; next }
+    { print }
+  ' "$SHELL_THEME" >"$SHELL_THEME.tmp" && mv "$SHELL_THEME.tmp" "$SHELL_THEME"
+fi
