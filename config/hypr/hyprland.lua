@@ -31,3 +31,15 @@ require("default.hypr.toggles")
 -- Smaller cursor — default 24 renders too large at 2x retina scale.
 hl.env("XCURSOR_SIZE", "20")
 hl.env("HYPRCURSOR_SIZE", "20")
+
+-- Omarchy's own default rule (default/hypr/apps/moonlight.lua) forces every
+-- Moonlight window fullscreen:
+--   o.window("com.moonlight_stream.Moonlight", { fullscreen = true, idle_inhibit = "fullscreen" })
+-- That's why Moonlight's own Display Mode setting appeared to be ignored. User
+-- config loads after Omarchy's defaults, so this overrides it. idle_inhibit is
+-- re-declared as "focus" because the default only inhibited idle *while
+-- fullscreen* -- without that the laptop would sleep mid-stream.
+o.window(
+  "com.moonlight_stream.Moonlight",
+  { fullscreen = false, idle_inhibit = "focus" }
+)

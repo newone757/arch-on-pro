@@ -39,3 +39,39 @@ hl.gesture({
     hl.dispatch(hl.dsp.exec_cmd("omarchy-shell shell hide mirador"))
   end,
 })
+
+-- 3-finger browser tab gestures. Previously handled by a raw-evdev daemon
+-- (super-scroll-dispatch) reading the trackpad device directly, but
+-- Hyprland's own native gesture engine (used above for the 4-finger
+-- gestures) appears to hold the trackpad in a way that starves that
+-- daemon of multi-touch events entirely — it saw literally nothing, not
+-- even with debug logging. Using hl.gesture directly sidesteps that,
+-- since it's the same mechanism already proven to receive touch data.
+hl.gesture({
+  fingers = 3,
+  direction = "left",
+  action = function()
+    hl.dispatch(hl.dsp.send_shortcut({ mods = "CTRL", key = "Tab", window = "activewindow" }))
+  end,
+})
+hl.gesture({
+  fingers = 3,
+  direction = "right",
+  action = function()
+    hl.dispatch(hl.dsp.send_shortcut({ mods = "CTRL SHIFT", key = "Tab", window = "activewindow" }))
+  end,
+})
+hl.gesture({
+  fingers = 3,
+  direction = "up",
+  action = function()
+    hl.dispatch(hl.dsp.send_shortcut({ mods = "CTRL", key = "W", window = "activewindow" }))
+  end,
+})
+hl.gesture({
+  fingers = 3,
+  direction = "down",
+  action = function()
+    hl.dispatch(hl.dsp.send_shortcut({ mods = "CTRL", key = "T", window = "activewindow" }))
+  end,
+})

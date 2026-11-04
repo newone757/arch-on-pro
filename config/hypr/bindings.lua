@@ -54,11 +54,24 @@ o.bind("SUPER + Q", "Close window", hl.dsp.window.close())
 -- (omarchy-system-lid-close correctly skips locking when docked/clamshell
 -- with an external display, unlike the old config's blunt lock+suspend).
 o.bind("switch:on:Apple SMC power/lid events", nil, "omarchy-system-lid-close", { locked = true })
-o.bind("switch:off:Apple SMC power/lid events", nil, "omarchy-hyprland-monitor-clamshell", { locked = true })
+-- Lid open runs omarchy-system-wake, not the bare clamshell reconcile that
+-- 4.0's default binds use. The lock screen blanks the panel with
+-- `omarchy-brightness-display off` (a DPMS disable), and clamshell only
+-- re-enables DPMS when it is actually clearing a clamshell flag — which never
+-- exists on a lid close with no external display. So the panel stayed dark
+-- after opening the lid until a keypress tripped key_press_enables_dpms.
+-- omarchy-system-wake is the stock wake path: DPMS on + keyboard backlight
+-- restore, and it calls the clamshell reconcile itself.
+o.bind("switch:off:Apple SMC power/lid events", nil, "omarchy-system-wake", { locked = true })
 
 -- Webapp/app launches that conflict with or are missing from 4.0's defaults.
-hl.unbind("SUPER + SHIFT + W") -- default: Omawrite
-o.bind("SUPER + SHIFT + W", "Typora", "uwsm-app -- typora --enable-wayland-ime")
+-- Omawrite (Omarchy's minimal Markdown app) is skipped by the Asahi package
+-- list, so it was never installed here and SUPER+SHIFT+W -- which the old
+-- config pointed at Typora -- launched nothing, since Typora isn't installed
+-- either. Installed omawrite from the omarchy repo (it does have an aarch64
+-- build) and dropped the Typora override, so SUPER+SHIFT+W goes back to the
+-- Omarchy default. Also on SUPER+N, which is where muscle memory wants it.
+o.bind("SUPER + N", "Omawrite", { launch = "omawrite" })
 hl.unbind("SUPER + SHIFT + A") -- default: ChatGPT
 o.bind("SUPER + SHIFT + A", "Claude", { webapp = "https://claude.ai" })
 o.bind("SUPER + SHIFT + R", "Reddit", { webapp = "https://reddit.com" })
@@ -101,4 +114,18 @@ o.bind(
   "SHIFT + TAB",
   "Workspace overview",
   "omarchy-shell shell toggle mirador '{}'"
+)
+
+-- Escape hatch for Moonlight streaming to the desktop (10.0.1.22). Moonlight's
+-- "capture system keyboard shortcuts" uses the Wayland shortcuts-inhibit
+-- protocol, which suppresses every local bind while it has focus -- and
+-- clicking away to drop focus isn't possible when Moonlight is the only window
+-- on its workspace. `dont_inhibit` exempts this one bind from that suppression,
+-- so it still fires mid-stream. Landing on another workspace releases the
+-- inhibit, after which all the normal bindings work again.
+o.bind(
+  "SUPER + GRAVE",
+  "Escape remote stream",
+  hl.dsp.focus({ workspace = "e+1" }),
+  { dont_inhibit = true }
 )
