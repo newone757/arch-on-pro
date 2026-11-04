@@ -1,0 +1,18 @@
+#!/bin/bash
+# User side of the themed lazydocker launcher (Super+Shift+D, see
+# ~/.config/hypr/bindings.lua). Same logic as Omarchy's
+# omarchy-launch-docker-tui, but the root path goes through the root-owned
+# /usr/local/bin/lazydocker-themed, which applies the theme's colours first.
+# Falls back to Omarchy's launcher if that helper isn't installed.
+
+if [[ ! -x /usr/local/bin/lazydocker-themed ]]; then
+  exec omarchy-launch-docker-tui
+fi
+
+if omarchy-sudo-docker; then
+  exec pkexec /usr/bin/env TERM="${TERM:-xterm-256color}" /usr/local/bin/lazydocker-themed
+else
+  # In the docker group: lazydocker runs as the user and reads
+  # ~/.config/lazydocker/config.yml, already themed directly.
+  exec lazydocker
+fi

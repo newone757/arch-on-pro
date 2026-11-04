@@ -28,6 +28,14 @@
 -- o.bind("SUPER + H", nil, "voxtype record toggle")
 -- o.bind("SUPER + PERIOD", nil, "omarchy-shell shell toggle omarchy.emojis")
 
+-- Docker TUI with theme colours: lazydocker runs as root (via pkexec), so it
+-- can't see the user's themed config. ~/.local/bin/lazydocker-themed-launch
+-- goes through root-owned /usr/local/bin/lazydocker-themed, which copies only
+-- the theme's colour values into root's config. Falls back to Omarchy's own
+-- launcher if that helper isn't installed.
+hl.unbind("SUPER + SHIFT + D")
+o.bind("SUPER + SHIFT + D", "Docker", { tui = os.getenv("HOME") .. "/.local/bin/lazydocker-themed-launch" })
+
 -- This keyboard (16" M1, j316) has no dedicated backlight key on its F-row,
 -- so reuse the screen-brightness keys (F1/F2) with SUPER for the keyboard
 -- backlight until the ALS auto-brightness daemon from arch-on-pro is set up.

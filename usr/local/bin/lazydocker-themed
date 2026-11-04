@@ -1,0 +1,47 @@
+#!/bin/bash
+# Root side of the themed lazydocker launcher. Installed root-owned as
+# /usr/local/bin/lazydocker-themed and run via pkexec (this file in
+# ~/.config/lazydocker is only the source copy; editing it changes nothing
+# until it is reinstalled with sudo).
+#
+# Omarchy runs lazydocker as root (user isn't in the docker group), so it
+# reads /root/.config/lazydocker, not the user's themed colours. Pointing root
+# at a user-editable lazydocker config would let anything running as the user
+# add customCommands that root then executes. Instead, this pulls ONLY the
+# four colour values out of the user's generated theme file, accepts them only
+# if they're plain #rrggbb hex, and writes a fresh root-owned config with them.
+set -u
+
+FALLBACK="#808080"
+keys=(activeBorderColor inactiveBorderColor selectedLineBgColor optionsTextColor)
+declare -A colour=()
+
+uid="${PKEXEC_UID:-}"
+if [[ $uid =~ ^[0-9]+$ ]]; then
+  home=$(getent passwd "$uid" | cut -d: -f6)
+  src="$home/.local/state/omarchy/current/theme/lazydocker.yml"
+  if [[ -n $home && -f $src && -r $src ]]; then
+    current=""
+    while IFS= read -r line; do
+      if [[ $line =~ ^[[:space:]]+([A-Za-z]+):[[:space:]]*$ ]]; then
+        current="${BASH_REMATCH[1]}"
+      elif [[ $line =~ ^[[:space:]]+-[[:space:]]+\"(#[0-9A-Fa-f]{6})\"[[:space:]]*$ && -n $current ]]; then
+        [[ -z ${colour[$current]:-} ]] && colour[$current]="${BASH_REMATCH[1]}"
+      fi
+    done < <(head -c 8192 -- "$src")
+  fi
+fi
+
+umask 022
+mkdir -p /root/.config/lazydocker
+{
+  echo "# Written by /usr/local/bin/lazydocker-themed from the active Omarchy theme."
+  echo "gui:"
+  echo "  theme:"
+  for key in "${keys[@]}"; do
+    echo "    $key:"
+    echo "      - \"${colour[$key]:-$FALLBACK}\""
+  done
+} >/root/.config/lazydocker/config.yml
+
+exec lazydocker "$@"

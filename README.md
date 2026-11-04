@@ -16,10 +16,14 @@ bin/
 ├── setup-brave             # Automates fresh Brave install setup
 ├── setup-easyeffects       # Installs EasyEffects + plugins and deploys preset
 ├── setup-titdb             # Installs TITDB palm/edge rejection daemon
-└── omarchy-icons-apply-color  # Recolors OmarchyIcons folder SVGs
+├── omarchy-icons-apply-color  # Recolors OmarchyIcons folder SVGs
+└── lazydocker-themed-launch   # Docker TUI launcher with theme colours (see below)
 
 usr/share/asahi-audio/j316/
 └── graph.json              # Tuned speaker DSP (Bankstown bass amt reduced)
+
+usr/local/bin/
+└── lazydocker-themed       # Root-owned side of the themed Docker TUI (install with sudo)
 
 etc/
 ├── modprobe.d/
@@ -42,12 +46,16 @@ config/
 │   ├── input.conf          # Trackpad settings and 3/4-finger gestures
 │   ├── looknfeel.conf      # Gaps, borders, animations, scrolling layout config
 │   ├── monitors.conf       # Display scale (2x) and VRR — tuned for 16" retina
+│   ├── theme-looks.lua     # Loads theme-looks/<active theme>.lua (see below)
+│   ├── theme-looks/        # Hand-written Hyprland looks for git-installed themes
 │   └── scripts/            # Gesture scripts for scrolling layout navigation
 ├── systemd/user/
 │   ├── auto-brightness.service          # Systemd user service for ALS auto-brightness
 │   └── super-scroll-dispatch.service    # Systemd user service for the gesture daemon
 ├── omarchy/
 │   ├── hooks/theme-set     # Syncs theme files and reloads Hyprland after theme change
+│   ├── hooks/theme-set.d/velora-glass  # Velora only: glass foot + readable bar popups
+│   ├── themed/lazydocker.yml.tpl       # Per-theme lazydocker colours (Omarchy template)
 │   └── branding/about.txt  # Custom ASCII logo for fastfetch
 ├── fastfetch/
 │   └── config.jsonc        # System info layout with hardware/software/uptime sections
@@ -61,6 +69,7 @@ local/share/easyeffects/output/
 └── Laptop.json             # Community Laptop preset
 
 local/share/applications/
+├── Docker.desktop          # Docker entry pointed at lazydocker-themed-launch
 ├── Lightroom CC.desktop    # Webapp shortcut (shows in Walker launcher)
 └── icons/
     └── Lightroom CC.png    # 128x128 icon for the above
@@ -93,9 +102,13 @@ Gestures handled by the daemon:
 - **3-finger vertical (left half of pad)** → browser tab close/new (`Ctrl+W` / `Ctrl+T`)
 - **4-finger horizontal** → navigate columns in scrolling layout (or `cyclenext` otherwise)
 
-4-finger vertical workspace switching is handled natively by Hyprland via `gesture = 4, vertical, workspace` in `input.conf`.
+Omarchy 4 (`input.lua`) now does the 4-finger gestures natively with `hl.gesture`:
+- **4-finger left/right** → switch workspace, matching the horizontal bar indicators.
+- **4-finger up/down** → `scroll_move`: drags the scrolling layout's columns with the fingers, niri-style, snapping to a column on release (`scale = 2.5`). Does nothing in dwindle.
+- **4-finger pinch in/out** → summon/hide Mirador. (A 4-finger *tap* isn't possible: libinput only reports 1–3 finger taps.)
+- **3-finger left/right/up/down** → browser tab next/prev/close/new.
 
-**Workspace animations** — `looknfeel.conf` replaces the disabled workspace animation with `slidevert` (vertical slide, speed 8) so workspace switching has visible direction. Matches the 4-finger up/down gesture.
+**Workspace animations** — `looknfeel.lua` re-enables the workspace animation as a horizontal `slide` (speed 8), matching the 4-finger left/right gesture.
 
 **Keybinding changes** — `Super+W` unbound from Typora and rebound to `omarchy-toggle-waybar` (hide/show the status bar). Theme menu moved from `Super+Shift+Ctrl+Space` to `Super+Shift+Space`. `Super+Shift+W` retains Typora.
 
@@ -129,6 +142,18 @@ sudo mkinitcpio -P                                          # rebake into the in
 
 **Waypaper** — GUI wallpaper picker (`yay -S waypaper`). Omarchy 4.0 note: no compositor-level backend (swaybg/swww/hyprpaper) is installed or needed — Quickshell paints the background itself — so `backend = none`. The `post_command` calls `omarchy-theme-bg-set "$wallpaper"`, the 4.0 helper that updates `~/.local/state/omarchy/current/background` (moved from `~/.config/omarchy/current/background` in 3.5.1 — both Quickshell's background plugin and its lock screen read this new path) and pushes the change to the live shell over IPC so it applies instantly. Wallpaper folder `~/Wallpapers`, 3-column grid. Scroll speed boosted via `scroll_touchpad 0.4` in `input.conf`.
 
+**Hyprland looks for git-installed themes** — Omarchy refuses to run Lua that a theme installed from a git repo ships (a repo could push code that runs on every Hyprland load), so those themes silently lose their borders, gaps, rounding, shadows, animations and blur. `config/hypr/theme-looks/<theme>.lua` holds a hand-written copy of the settings for Velora, Last Horizon, Saga (same look as Last Horizon), Turbonite and Greek Noir; `config/hypr/theme-looks.lua`, required from `hyprland.lua` right after Omarchy's defaults, loads the one for the active theme. Personal overrides in `hypr/*.lua` load later and still win. To cover another git theme, read its `hyprland.lua` and write the equivalent settings into a new `theme-looks/<name>.lua` — don't copy the file blindly.
+
+**Velora glass** — Velora is the only theme built around blur. Besides its blur and shell layer rules (in `theme-looks/velora.lua`), `hooks/theme-set.d/velora-glass` runs on every theme switch and, only when the new theme is Velora:
+- gives foot the bar's glass: `alpha=0.52` (only the background, text stays opaque) and `blur=yes` — foot must request blur itself via ext-background-effect, or Hyprland leaves its background sharp. Terminal windows themselves stay at full opacity.
+- raises the bar popup / tray menu tint from 0.52 to 0.70 for readable small text.
+It patches the generated files in `~/.local/state/omarchy/current/theme/` rather than `~/.config/omarchy/shell.toml`, so other themes keep their own solid popups and solid terminals. New foot windows pick it up; existing ones don't.
+
+**Themed lazydocker** — Omarchy themes btop but not lazydocker, which falls back to bold white borders and a solid ANSI-blue selection. `config/omarchy/themed/lazydocker.yml.tpl` is an Omarchy template rendered per theme (accent for the active border, muted for the rest, like btop). The catch: this machine isn't in the `docker` group (see the Docker note under Remote desktop), so Omarchy runs lazydocker as **root** via pkexec and it reads root's config. Pointing root at a user-editable lazydocker config would let anything running as you add `customCommands` that root executes, so instead:
+- `bin/lazydocker-themed-launch` (in `~/.local/bin`) does what `omarchy-launch-docker-tui` does, but the pkexec path runs the root-owned `/usr/local/bin/lazydocker-themed`.
+- That helper reads only the four colour values from the active theme's rendered `lazydocker.yml`, accepts them only as plain `#rrggbb`, writes a fresh root-owned config, and starts lazydocker. The password prompt stays, as it should.
+- Every way in uses the launcher: Super+Shift+D (`bindings.lua`), the Docker entry in the menu (`local/share/applications/Docker.desktop`), and a `lazydocker` alias in `~/.bashrc`.
+
 ---
 
 ## Applying these configs
@@ -154,7 +179,24 @@ cp bin/omarchy-icons-apply-color ~/.local/bin/
 chmod +x ~/.local/bin/omarchy-icons-apply-color
 ```
 
-`bin/omarchy-bg-switcher-full` needs the same treatment — the
+Themed lazydocker (see **Themed lazydocker** above). The root helper must be
+root-owned so nothing running as you can change what root runs; the alias
+covers typing `lazydocker` in a terminal:
+
+```bash
+cp bin/lazydocker-themed-launch ~/.local/bin/ && chmod +x ~/.local/bin/lazydocker-themed-launch
+sudo install -o root -g root -m 755 usr/local/bin/lazydocker-themed /usr/local/bin/lazydocker-themed
+mkdir -p ~/.config/omarchy/themed ~/.config/lazydocker
+cp config/omarchy/themed/lazydocker.yml.tpl ~/.config/omarchy/themed/
+ln -sf ~/.local/state/omarchy/current/theme/lazydocker.yml ~/.config/lazydocker/config.yml
+echo 'alias lazydocker="$HOME/.local/bin/lazydocker-themed-launch"' >> ~/.bashrc
+omarchy theme set "$(cat ~/.local/state/omarchy/current/theme.name)"   # renders the template
+```
+
+`config/omarchy/hooks/theme-set.d/velora-glass` goes in `~/.config/omarchy/hooks/theme-set.d/`
+(executable); `config/hypr/theme-looks.lua` and `config/hypr/theme-looks/` go in `~/.config/hypr/`.
+
+`bin/omarchy-bg-switcher-full` also needs copying to `~/.local/bin/` — the
 `SUPER+CTRL+SPACE` background-switcher keybind (`config/hypr/bindings.lua`)
 calls it by bare name. It's the stock `omarchy-theme-bg-switcher` picker
 extended to also browse `~/Wallpapers` after the active theme's own
