@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Name=HA Fusion
+Comment=HA Fusion
+Exec=omarchy-launch-webapp http://10.0.1.10:5050
+Terminal=false
+Type=Application
+Icon=ha-fusion
+StartupNotify=true

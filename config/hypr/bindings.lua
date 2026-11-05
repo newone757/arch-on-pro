@@ -84,6 +84,8 @@ hl.unbind("SUPER + SHIFT + A") -- default: ChatGPT
 o.bind("SUPER + SHIFT + A", "Claude", { webapp = "https://claude.ai" })
 o.bind("SUPER + SHIFT + R", "Reddit", { webapp = "https://reddit.com" })
 o.bind("SUPER + SHIFT + L", "Lightroom CC", { webapp = "https://lightroom.adobe.com/home", focus = true })
+-- HA-Fusion dashboard: the `ha-fusion` container on Unraid (10.0.1.10:5050).
+o.bind("SUPER + SHIFT + H", "Home Assistant", { webapp = "http://10.0.1.10:5050", focus = true })
 
 -- Layout-aware split/consume: default SUPER+J always calls togglesplit,
 -- which is a dwindle-only concept and does nothing useful in the scrolling

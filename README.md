@@ -71,8 +71,12 @@ local/share/easyeffects/output/
 local/share/applications/
 ├── Docker.desktop          # Docker entry pointed at lazydocker-themed-launch
 ├── Lightroom CC.desktop    # Webapp shortcut (shows in Walker launcher)
+├── HA Fusion.desktop      # Webapp for the HA-Fusion dashboard on Unraid (10.0.1.10:5050)
 └── icons/
     └── Lightroom CC.png    # 128x128 icon for the above
+
+local/share/icons/hicolor/256x256/apps/
+└── ha-fusion.png           # HA Fusion icon (newer omarchy-webapp-install stores icons here)
 
 docs/
 └── armarchy-m1-install-guide.md
