@@ -126,13 +126,23 @@ o.bind(
   "omarchy-shell shell toggle mirador '{}'"
 )
 
--- Escape hatch for Moonlight streaming to the desktop (10.0.1.22). Moonlight's
--- "capture system keyboard shortcuts" uses the Wayland shortcuts-inhibit
--- protocol, which suppresses every local bind while it has focus -- and
--- clicking away to drop focus isn't possible when Moonlight is the only window
--- on its workspace. `dont_inhibit` exempts this one bind from that suppression,
--- so it still fires mid-stream. Landing on another workspace releases the
--- inhibit, after which all the normal bindings work again.
+-- Moonlight (streaming from "cave"): CTRL + ALT + ESCAPE releases mouse and
+-- keyboard back to this laptop; press it again (or click into the stream) to
+-- hand them back. It just sends Moonlight's own hard-coded, unmemorable
+-- CTRL+ALT+SHIFT+Z toggle. Moonlight captures system shortcuts via the Wayland
+-- shortcuts-inhibit protocol, which mutes every local bind while it has focus;
+-- `dont_inhibit` exempts this one so it always fires mid-stream. Once released,
+-- Moonlight drops the inhibit and all the normal SUPER bindings work again.
+-- Down/up split mirrors Omarchy's clipboard.lua workaround for stuck keys.
+o.bind("CTRL + ALT + ESCAPE", "Release/recapture Moonlight stream", function()
+  hl.dispatch(hl.dsp.send_key_state({ mods = "CTRL ALT SHIFT", key = "Z", state = "down" }))
+  hl.timer(function()
+    hl.dispatch(hl.dsp.send_key_state({ mods = "CTRL ALT SHIFT", key = "Z", state = "up" }))
+  end, { timeout = 50, type = "oneshot" })
+end, { dont_inhibit = true })
+
+-- Fallback if Moonlight ever ignores the key above: jump to the next workspace,
+-- which drops the inhibit no matter what.
 o.bind(
   "SUPER + GRAVE",
   "Escape remote stream",

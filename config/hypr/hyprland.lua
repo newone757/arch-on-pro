@@ -47,3 +47,28 @@ o.window(
   "com.moonlight_stream.Moonlight",
   { fullscreen = false, idle_inhibit = "focus" }
 )
+-- Ignore Moonlight's own requests to go fullscreen, so the stream stays a
+-- normal tiled window that fills its workspace with the bar still visible.
+-- SUPER+F still fullscreens it on purpose.
+o.window("com.moonlight_stream.Moonlight", { suppress_event = "fullscreen maximize" })
+
+-- The stream is a second window with the same app ID as the launcher, so a
+-- window rule can't tell them apart. Instead: when a Moonlight window opens
+-- while another Moonlight window already exists, it's the stream -- send it to
+-- an empty workspace (and follow it) so it doesn't split the screen with the
+-- launcher.
+hl.on("window.open", function(win)
+  if not win or win.class ~= "com.moonlight_stream.Moonlight" then
+    return
+  end
+  for _, other in ipairs(hl.get_windows()) do
+    if other.class == win.class and other.address ~= win.address then
+      hl.dispatch(hl.dsp.window.move({
+        workspace = "empty",
+        follow = true,
+        window = "address:" .. win.address,
+      }))
+      return
+    end
+  end
+end)
